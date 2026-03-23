@@ -25,7 +25,7 @@ jobs:
 
       - run: npm ci
 
-      # --tag latest is npm default; explicit so npx scaffold-agent@latest always matches this publish
+      # --tag latest explicit; scoped package @1claw/scaffold-agent → npx @1claw/scaffold-agent@latest
       - run: npm publish --provenance --access public --tag latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

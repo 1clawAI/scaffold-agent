@@ -1,5 +1,5 @@
 {
-  "name": "scaffold-agent",
+  "name": "@1claw/scaffold-agent",
   "version": "0.1.0",
   "description": "Interactive CLI to scaffold monorepo projects for onchain AI agents",
   "type": "module",
