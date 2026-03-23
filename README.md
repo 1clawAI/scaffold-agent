@@ -12,6 +12,8 @@ npx @1claw/scaffold-agent@latest
 
 (`@latest` is the default dist-tag — you can omit it. Use the scoped package name so npm resolves the 1claw org package, not an unrelated unscoped name.)
 
+**CLI flags:** `scaffold-agent --version` / `-V`, `scaffold-agent --help` / `-h`. Unknown `-…` options exit with an error.
+
 The wizard walks through:
 
 1. **Project name** — directory to create

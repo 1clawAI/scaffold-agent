@@ -1,66 +1,66 @@
 {
-  "name": "@1claw/scaffold-agent",
-  "version": "0.1.0",
-  "description": "Interactive CLI to scaffold monorepo projects for onchain AI agents",
-  "type": "module",
-  "author": "1clawAI (https://1claw.xyz)",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/1clawAI/scaffold-agent.git"
-  },
-  "bugs": {
-    "url": "https://github.com/1clawAI/scaffold-agent/issues"
-  },
-  "homepage": "https://github.com/1clawAI/scaffold-agent#readme",
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
-  },
-  "bin": {
-    "scaffold-agent": "dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "start": "node dist/cli.js",
-    "prepublishOnly": "npm run build"
-  },
-  "keywords": [
-    "scaffold",
-    "ethereum",
-    "ai-agent",
-    "onchain",
-    "cli",
-    "monorepo",
-    "1claw",
-    "foundry",
-    "hardhat",
-    "nextjs",
-    "shroud"
-  ],
-  "license": "MIT",
-  "dependencies": {
-    "@inquirer/prompts": "^7.0.0",
-    "chalk": "^5.4.0",
-    "figlet": "^1.8.0",
-    "ora": "^8.1.0",
-    "qrcode-terminal": "^0.12.0",
-    "viem": "^2.21.0"
-  },
-  "devDependencies": {
-    "@types/figlet": "^1.7.0",
-    "@types/node": "^22.0.0",
-    "@types/qrcode-terminal": "^0.12.0",
-    "tsup": "^8.3.0",
-    "typescript": "^5.6.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "packageManager": "yarn@3.2.3+sha512.f26f951f67de0c6a33ee381e5ff364709c87e70eb5e65c694e4facde3512f1fa80b8679e6ba31ce7d340fbb46f08dd683af9457e240f25a204be7427940d767e"
+    "name": "@1claw/scaffold-agent",
+    "version": "0.1.2",
+    "description": "Interactive CLI to scaffold monorepo projects for onchain AI agents",
+    "type": "module",
+    "author": "1clawAI (https://1claw.xyz)",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/1clawAI/scaffold-agent.git"
+    },
+    "bugs": {
+        "url": "https://github.com/1clawAI/scaffold-agent/issues"
+    },
+    "homepage": "https://github.com/1clawAI/scaffold-agent#readme",
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "bin": {
+        "scaffold-agent": "dist/cli.js"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "start": "node dist/cli.js",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "scaffold",
+        "ethereum",
+        "ai-agent",
+        "onchain",
+        "cli",
+        "monorepo",
+        "1claw",
+        "foundry",
+        "hardhat",
+        "nextjs",
+        "shroud"
+    ],
+    "license": "MIT",
+    "dependencies": {
+        "@inquirer/prompts": "^7.0.0",
+        "chalk": "^5.4.0",
+        "figlet": "^1.8.0",
+        "ora": "^8.1.0",
+        "qrcode-terminal": "^0.12.0",
+        "viem": "^2.21.0"
+    },
+    "devDependencies": {
+        "@types/figlet": "^1.7.0",
+        "@types/node": "^22.0.0",
+        "@types/qrcode-terminal": "^0.12.0",
+        "tsup": "^8.3.0",
+        "typescript": "^5.6.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "packageManager": "yarn@3.2.3+sha512.f26f951f67de0c6a33ee381e5ff364709c87e70eb5e65c694e4facde3512f1fa80b8679e6ba31ce7d340fbb46f08dd683af9457e240f25a204be7427940d767e"
 }

@@ -1,5 +1,6 @@
-import { join } from "node:path";
-import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import chalk from "chalk";
 import ora from "ora";
@@ -30,6 +31,69 @@ import type {
   ShroudBillingMode,
   ShroudUpstreamProvider,
 } from "./types.js";
+
+function readOwnPackageJson(): {
+  name: string;
+  version: string;
+  description?: string;
+} {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const root = join(here, "..");
+  const raw = readFileSync(join(root, "package.json"), "utf8");
+  return JSON.parse(raw) as { name: string; version: string; description?: string };
+}
+
+function printVersion(): void {
+  try {
+    const { name, version } = readOwnPackageJson();
+    console.log(`${name} ${version}`);
+  } catch {
+    console.log("unknown");
+  }
+}
+
+function printHelp(): void {
+  let desc =
+    "Interactive CLI to scaffold monorepo projects for onchain AI agents";
+  try {
+    desc = readOwnPackageJson().description || desc;
+  } catch {
+    /* use default */
+  }
+  console.log(`
+${desc}
+
+Usage:
+  scaffold-agent [options]
+
+Options:
+  -h, --help       Show this help message
+  -V, --version    Print the package version
+
+With no options, starts the interactive wizard.
+`);
+}
+
+/**
+ * Handle global flags (--help, --version) and reject unknown options.
+ * Positional args are reserved for future use and currently ignored.
+ */
+function handleGlobalCliArgs(argv: string[]): void {
+  for (const arg of argv) {
+    if (arg === "-h" || arg === "--help") {
+      printHelp();
+      process.exit(0);
+    }
+    if (arg === "-V" || arg === "--version") {
+      printVersion();
+      process.exit(0);
+    }
+    if (arg.startsWith("-")) {
+      console.error(`Unknown option: ${arg}\nRun scaffold-agent --help for usage.`);
+      process.exit(1);
+    }
+  }
+}
 
 /** Written into generated `.env` when LLM = 1Claw (Shroud). */
 const SHROUD_AGENT_ID_ENV_COMMENT =
@@ -92,6 +156,8 @@ function llmEnvKeyName(llm: LlmProvider): string | null {
 }
 
 async function main() {
+  handleGlobalCliArgs(process.argv.slice(2));
+
   showBanner();
 
   // ── Project name ──────────────────────────────────────────────────────
