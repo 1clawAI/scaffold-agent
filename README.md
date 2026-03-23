@@ -133,7 +133,7 @@ npm run build
 npm publish --tag latest
 ```
 
-**CI publish:** add an npm **Automation** token as **`NPM_TOKEN`**, then create a **GitHub Release** or run **Publish to npm**. The workflow runs `npm publish --provenance --access public --tag latest`.
+Optional: **`npm publish --provenance --tag latest`** if you use [npm provenance](https://docs.npmjs.com/generating-provenance-statements) from your environment.
 
 If you previously published **`@1claw/scaffold-agent`**, deprecate that package on npm (`npm deprecate @1claw/scaffold-agent@"< version" "Use scaffold-agent instead"`) so users migrate to the single package.
 
