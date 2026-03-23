@@ -116,7 +116,117 @@ export async function promptIdentity(useOneClaw: boolean): Promise<boolean> {
       { value: false, name: "No" },
     ],
   });
+}
+
+/**
+ * After `ampersend setup start` / approval / `setup finish` — smart account + session key.
+ * Returns undefined if user defers.
+ */
+export async function promptAmpersendAgentCredentials(): Promise<
+  { smartAccountAddress: string; sessionKeyPrivateKey: string } | undefined
+> {
+  const when = await select<"now" | "later">({
+    message:
+      "Add Ampersend smart account address + session key private key now?",
+    choices: [
+      {
+        value: "now" as const,
+        name: "Enter now (from ampersend setup finish)",
+      },
+      {
+        value: "later" as const,
+        name: "Add later to .env / vault",
+      },
+    ],
+  });
+  if (when !== "now") return undefined;
+
+  const smartAccountAddress = await input({
+    message: "Smart account address (AGENT_ADDRESS, 0x...):",
+    validate: (val) => {
+      if (!isValidEthAddress(val)) {
+        return "Must be a 40-hex-character Ethereum address (0x…)";
+      }
+      return true;
+    },
+  });
+
+  const sessionKeyPrivateKey = await password({
+    message: "Session key private key (0x..., for AGENT_PRIVATE_KEY):",
+    mask: "*",
+    validate: (val) => {
+      if (!isValidPrivateKey(val)) {
+        return "Must be a 32-byte hex private key (0x + 64 hex chars)";
+      }
+      return true;
+    },
+  });
+
+  return {
+    smartAccountAddress: normalize0xHex(smartAccountAddress),
+    sessionKeyPrivateKey: normalize0xHex(sessionKeyPrivateKey),
+  };
+}
+
+export async function promptGenerateDeployerAccount(): Promise<boolean> {
+  return select<boolean>({
+    message: "Generate a Deployer Account?",
+    choices: [
+      { value: true, name: "Yes" },
+      {
+        value: false,
+        name: "No (paste an existing key, or run `just generate` later)",
+      },
+    ],
+  });
   return result;
+}
+
+export async function promptExistingDeployerPrivateKey(): Promise<string> {
+  return password({
+    message: "Deployer private key (0x...) — required for 1Claw vault:",
+    mask: "*",
+    validate: (val) => {
+      if (!isValidPrivateKey(val)) {
+        return "Must be a 32-byte hex private key (0x + 64 hex chars)";
+      }
+      return true;
+    },
+  });
+}
+
+export async function promptDeployerWhenNotGenerated(): Promise<
+  "enter_now" | "skip"
+> {
+  return select<"enter_now" | "skip">({
+    message: "How do you want to set the deployer?",
+    choices: [
+      {
+        value: "enter_now" as const,
+        name: "Enter existing deployer private key now",
+      },
+      {
+        value: "skip" as const,
+        name: "Skip — run `just generate` before `just deploy`",
+      },
+    ],
+  });
+}
+
+export async function promptOptionalExistingDeployerPrivateKey(): Promise<
+  string | undefined
+> {
+  const pk = await password({
+    message: "Deployer private key (0x...):",
+    mask: "*",
+    validate: (val) => {
+      if (!isValidPrivateKey(val)) {
+        return "Must be a 32-byte hex private key (0x + 64 hex chars)";
+      }
+      return true;
+    },
+  });
+  return normalize0xHex(pk);
 }
 
 export async function promptLlmProvider(

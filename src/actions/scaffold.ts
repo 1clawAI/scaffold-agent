@@ -206,7 +206,7 @@ ${config.chain !== "none" ? "\n**Local deploy:** **\`just generate\`** tries to 
 
 | Command | Description |
 |---|---|
-${config.chain !== "none" ? "| \`just chain\` | Start local blockchain |\n| \`just fund\` | Fund \`DEPLOYER_ADDRESS\` + optional \`AGENT_ADDRESS\` (100 ETH each from account #0) |\n| \`just deploy\` | Deploy contracts & auto-generate ABI types |\n" : ""}${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just list-1claw\` | Print vault IDs + agent UUIDs from API (\`ONECLAW_API_KEY\`) |\n" : ""}| \`just start\` | Start the frontend / agent (may prompt for secrets password) |
+${config.chain !== "none" ? "| \`just chain\` | Start local blockchain |\n| \`just fund\` | Fund \`DEPLOYER_ADDRESS\` + optional \`AGENT_ADDRESS\` (100 ETH each from account #0) |\n| \`just deploy\` | Deploy contracts & auto-generate ABI types |\n" : ""}${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just list-1claw\` | Print vault IDs + agent UUIDs from API (\`ONECLAW_API_KEY\`) |\n| \`just sync-1claw-env\` | List + write first vault + agent UUID into repo-root \`.env\` |\n" : ""}| \`just start\` | Start the frontend / agent (may prompt for secrets password) |
 | \`just generate\` | Generate a deployer wallet (password prompt if \`.env.secrets.encrypted\` exists) |
 
 ## Secrets
@@ -335,6 +335,10 @@ function writeJustfile(root: string, config: ScaffoldConfig) {
       "# List 1Claw vault + agent UUIDs (needs ONECLAW_API_KEY; use with encrypted secrets)",
       "list-1claw:",
       "    node scripts/with-secrets.mjs -- node scripts/list-1claw-ids.mjs",
+      "",
+      "# List + write first vault + first agent UUID into repo-root .env (ONECLAW_VAULT_ID / ONECLAW_AGENT_ID)",
+      "sync-1claw-env:",
+      "    node scripts/with-secrets.mjs -- node scripts/list-1claw-ids.mjs --write-env",
       "",
     );
   }

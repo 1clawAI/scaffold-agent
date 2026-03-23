@@ -74,7 +74,7 @@ With your **user** `ONECLAW_API_KEY` you can call the same REST API the CLI uses
 - `GET /v1/vaults` → vault UUIDs (`ONECLAW_VAULT_ID`)
 - `GET /v1/agents` → agent UUIDs (`ONECLAW_AGENT_ID`)
 
-Scaffolded 1Claw projects include **`just list-1claw`** (runs `scripts/list-1claw-ids.mjs` under `with-secrets` when needed).
+Scaffolded 1Claw projects include **`just list-1claw`** (runs `scripts/list-1claw-ids.mjs` under `with-secrets` when needed) and **`just sync-1claw-env`** to write the first listed vault + agent UUIDs into repo-root `.env`.
 
 Agent **API keys** (`ONECLAW_AGENT_API_KEY` / `ocv_…`) are **not** returned by list endpoints — only when you **create** an agent (`POST /v1/agents`, as in `setupOneClaw`) or **rotate** via [`@1claw/sdk`](https://github.com/1clawAI/1claw-sdk) `client.agents.rotateKey(id)`.
 
@@ -83,7 +83,7 @@ Agent **API keys** (`ONECLAW_AGENT_API_KEY` / `ocv_…`) are **not** returned by
 When you choose **1Claw (1claw.xyz)**, the CLI:
 
 - Authenticates with your `ONECLAW_API_KEY`
-- Creates a vault for the project and writes **`ONECLAW_VAULT_ID`** into `.env` **when** you enter the API key during setup **and** vault creation succeeds. If you skip the key (“add later”) or setup fails, **`ONECLAW_VAULT_ID` stays blank** — then run **`just list-1claw`** (with your key loaded) and paste a vault id from the output (or from the dashboard).
+- Creates a vault for the project and writes **`ONECLAW_VAULT_ID`** into `.env` **when** you enter the API key during setup **and** vault creation succeeds. If you skip the key (“add later”) or setup fails, **`ONECLAW_VAULT_ID` stays blank** — then run **`just sync-1claw-env`** (with your key loaded) or **`just list-1claw`** and paste IDs (or copy from the dashboard).
 - Stores the deployer private key at `private-keys/deployer` in the vault (**not** on disk)
 - If agent identity is generated, stores it at `private-keys/agent` and registers the agent
 - If you pick **Gemini, OpenAI, or Anthropic** as the LLM, the CLI can store that

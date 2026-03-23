@@ -2,6 +2,76 @@ import type { OneClawResult } from "../types.js";
 
 const BASE_URL = "https://api.1claw.xyz";
 
+/** POST /v1/vaults — body is VaultResponse or occasionally wrapped. */
+function parseVaultIdFromCreateResponse(json: unknown): string {
+  if (!json || typeof json !== "object") {
+    throw new Error("Invalid vault create response (not an object)");
+  }
+  const o = json as Record<string, unknown>;
+  if (typeof o.id === "string" && o.id.trim()) return o.id.trim();
+  const vault = o.vault;
+  if (vault && typeof vault === "object") {
+    const id = (vault as { id?: string }).id;
+    if (typeof id === "string" && id.trim()) return id.trim();
+  }
+  const data = o.data;
+  if (data && typeof data === "object") {
+    const d = data as Record<string, unknown>;
+    if (typeof d.id === "string" && d.id.trim()) return d.id.trim();
+    const innerVault = d.vault;
+    if (innerVault && typeof innerVault === "object") {
+      const id = (innerVault as { id?: string }).id;
+      if (typeof id === "string" && id.trim()) return id.trim();
+    }
+  }
+  throw new Error(
+    `Unexpected vault create response shape: ${JSON.stringify(json).slice(0, 200)}`,
+  );
+}
+
+/**
+ * POST /v1/agents — OpenAPI AgentCreatedResponse: { agent: AgentResponse, api_key? }
+ * (not top-level id — that was a scaffold bug that left ONECLAW_AGENT_ID blank.)
+ */
+function parseAgentCreatedResponse(json: unknown): { id: string; apiKey: string } {
+  if (!json || typeof json !== "object") {
+    throw new Error("Invalid agent create response (not an object)");
+  }
+  const o = json as Record<string, unknown>;
+  let id: string | undefined;
+  let apiKey: string | undefined;
+
+  const agent = o.agent;
+  if (agent && typeof agent === "object") {
+    const aid = (agent as { id?: string }).id;
+    if (typeof aid === "string" && aid.trim()) id = aid.trim();
+  }
+  if (!id && typeof o.id === "string" && o.id.trim()) id = o.id.trim();
+  if (typeof o.api_key === "string" && o.api_key.trim()) {
+    apiKey = o.api_key.trim();
+  }
+
+  const data = o.data;
+  if (data && typeof data === "object") {
+    const d = data as Record<string, unknown>;
+    const innerAgent = d.agent;
+    if (!id && innerAgent && typeof innerAgent === "object") {
+      const aid = (innerAgent as { id?: string }).id;
+      if (typeof aid === "string" && aid.trim()) id = aid.trim();
+    }
+    if (!apiKey && typeof d.api_key === "string" && d.api_key.trim()) {
+      apiKey = d.api_key.trim();
+    }
+  }
+
+  if (!id || !apiKey) {
+    throw new Error(
+      `Unexpected agent create response (need agent.id + api_key): ${JSON.stringify(json).slice(0, 300)}`,
+    );
+  }
+  return { id, apiKey };
+}
+
 async function getToken(apiKey: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/v1/auth/api-key-token`, {
     method: "POST",
@@ -35,8 +105,8 @@ async function createVault(
     const body = await res.text().catch(() => "");
     throw new Error(`Failed to create vault (${res.status}): ${body || res.statusText}`);
   }
-  const data = (await res.json()) as { id: string };
-  return data.id;
+  const json: unknown = await res.json();
+  return parseVaultIdFromCreateResponse(json);
 }
 
 async function storeSecret(
@@ -81,8 +151,8 @@ async function registerAgent(
     const body = await res.text().catch(() => "");
     throw new Error(`Failed to register agent (${res.status}): ${body || res.statusText}`);
   }
-  const data = (await res.json()) as { id: string; api_key: string };
-  return { id: data.id, apiKey: data.api_key };
+  const json: unknown = await res.json();
+  return parseAgentCreatedResponse(json);
 }
 
 export async function setupOneClaw(
