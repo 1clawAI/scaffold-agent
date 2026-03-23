@@ -8,6 +8,11 @@ import type {
   ShroudBillingMode,
   ShroudUpstreamProvider,
 } from "./types.js";
+import {
+  isValidEthAddress,
+  isValidPrivateKey,
+  normalize0xHex,
+} from "./actions/keys.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
 
 function llmVendorLabel(llm: Exclude<LlmProvider, "oneclaw">): string {
@@ -104,7 +109,7 @@ export async function promptSecrets(): Promise<SecretsConfig> {
 }
 
 export async function promptIdentity(useOneClaw: boolean): Promise<boolean> {
-  const result = await select({
+  return select<boolean>({
     message: "Generate Agent Identity?",
     choices: [
       {
@@ -179,7 +184,6 @@ export async function promptGenerateDeployerAccount(): Promise<boolean> {
       },
     ],
   });
-  return result;
 }
 
 export async function promptExistingDeployerPrivateKey(): Promise<string> {

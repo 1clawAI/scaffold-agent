@@ -1317,8 +1317,14 @@ function nextApiRouteOneClawShroud(
   billingModeDefault: ShroudBillingMode,
 ): string {
   const modelFallback = shroudDefaultModel(upstream);
-  return `import { convertToCoreMessages, streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+  return `import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import {
+  convertToCoreMessages,
+  createDataStreamResponse,
+  formatDataStreamPart,
+  streamText,
+  type CoreMessage,
+} from "ai";
 
 const shroudBaseURL =
   process.env.SHROUD_BASE_URL || "https://shroud.1claw.xyz/v1";
@@ -1332,6 +1338,13 @@ const defaultModel =
 const billingMode =
   (process.env.SHROUD_BILLING_MODE as "token_billing" | "provider_api_key") ||
   "${billingModeDefault}";
+
+/** Gemini: call Google API directly when a key is available (Shroud /chat/completions → Gemini is broken). */
+const CHAT_SYSTEM =
+  "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+
+const STREAM_CHUNK =
+  Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
 
 /** Canonical 8-4-4-4-12 hex (any version/variant 1Claw may return). */
 const ONECLAW_UUID_RE =
@@ -1411,6 +1424,120 @@ function validateShroudEnv():
   return { ok: true, agentId, agentKey };
 }
 
+function coreContentToText(content: CoreMessage["content"]): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("");
+}
+
+function buildShroudOpenAIMessages(core: CoreMessage[]): Array<{
+  role: "system" | "user" | "assistant";
+  content: string;
+}> {
+  const out: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [{ role: "system", content: CHAT_SYSTEM }];
+  for (const m of core) {
+    if (m.role === "system") continue;
+    if (m.role === "user" || m.role === "assistant") {
+      out.push({ role: m.role, content: coreContentToText(m.content) });
+    }
+  }
+  return out;
+}
+
+async function readVaultSecretPlaintext(vaultId, secretPath, agentId, agentApiKey) {
+  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
+    /\\/$/,
+    "",
+  );
+  const userApiKey = normalizeOneclawEnvValue(process.env.ONECLAW_API_KEY);
+  let token;
+  if (userApiKey) {
+    const tr = await fetch(base + "/v1/auth/api-key-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: userApiKey }),
+    });
+    if (!tr.ok) return null;
+    token = (await tr.json()).access_token;
+  } else {
+    const tr = await fetch(base + "/v1/auth/agent-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: agentId, api_key: agentApiKey }),
+    });
+    if (!tr.ok) return null;
+    token = (await tr.json()).access_token;
+  }
+  const encPath = encodeURIComponent(secretPath);
+  const res = await fetch(
+    base + "/v1/vaults/" + vaultId + "/secrets/" + encPath,
+    { headers: { Authorization: "Bearer " + token } },
+  );
+  if (!res.ok) return null;
+  const j = await res.json();
+  return typeof j.value === "string" ? j.value.trim() : null;
+}
+
+async function resolveGoogleGeminiApiKey(agentId, agentKey) {
+  const inline =
+    (process.env.SHROUD_PROVIDER_API_KEY || "").trim() ||
+    (process.env.GOOGLE_GENERATIVE_AI_API_KEY || "").trim();
+  if (inline) return inline;
+  const vaultId = (process.env.ONECLAW_VAULT_ID || "").trim();
+  const vaultPath =
+    (process.env.SHROUD_PROVIDER_VAULT_PATH || "").trim() || "api-keys/google";
+  if (!vaultId) return null;
+  return readVaultSecretPlaintext(vaultId, vaultPath, agentId, agentKey);
+}
+
+function gemini503() {
+  return new Response(
+    JSON.stringify({
+      error:
+        "Shroud’s Gemini path rejects OpenAI-shaped JSON. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or store your Gemini key in the vault (default path api-keys/google) with ONECLAW_VAULT_ID and ONECLAW_API_KEY (or an agent that can read it).",
+    }),
+    { status: 503, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+async function shroudChatCompletionNonStream(
+  openaiMessages: Array<{ role: string; content: string }>,
+  shroudHeaders: Record<string, string>,
+): Promise<{ ok: true; text: string } | { ok: false; status: number; body: string }> {
+  const base = shroudBaseURL.replace(/\\/$/, "");
+  const url = base + "/chat/completions";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...shroudHeaders,
+    },
+    body: JSON.stringify({
+      model: defaultModel,
+      messages: openaiMessages,
+    }),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    return { ok: false, status: res.status, body: raw };
+  }
+  try {
+    const data = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string | null } }>;
+    };
+    const c = data.choices?.[0]?.message?.content;
+    const text = typeof c === "string" ? c : c == null ? "" : String(c);
+    return { ok: true, text };
+  } catch {
+    return { ok: false, status: 502, body: "Invalid JSON from Shroud" };
+  }
+}
+
 export async function POST(req: Request) {
   let messages: unknown[];
   try {
@@ -1433,8 +1560,29 @@ export async function POST(req: Request) {
   if (!creds.ok) return creds.response;
   const { agentId, agentKey } = creds;
 
-  const headers: Record<string, string> = {
-    "X-Shroud-Agent-Key": \`\${agentId}:\${agentKey}\`,
+  const providerLC = shroudProvider.toLowerCase();
+  if (
+    (providerLC === "google" || providerLC === "gemini") &&
+    process.env.SHROUD_DISABLE_GEMINI_DIRECT !== "1"
+  ) {
+    const geminiKey = await resolveGoogleGeminiApiKey(agentId, agentKey);
+    if (geminiKey) {
+      const google = createGoogleGenerativeAI({ apiKey: geminiKey });
+      const result = streamText({
+        model: google(defaultModel),
+        system: CHAT_SYSTEM,
+        messages: convertToCoreMessages(messages),
+        onError({ error }) {
+          console.error("[api/chat] Gemini (direct) error:", error);
+        },
+      });
+      return result.toDataStreamResponse();
+    }
+    return gemini503();
+  }
+
+  const shroudHeaders: Record<string, string> = {
+    "X-Shroud-Agent-Key": agentId + ":" + agentKey,
     "X-Shroud-Provider": shroudProvider,
   };
 
@@ -1443,29 +1591,56 @@ export async function POST(req: Request) {
     const vaultPath = (process.env.SHROUD_PROVIDER_VAULT_PATH || "").trim();
     const inlineKey = (process.env.SHROUD_PROVIDER_API_KEY || "").trim();
     if (vaultId && vaultPath) {
-      headers["X-Shroud-Api-Key"] = \`vault://\${vaultId}/\${vaultPath}\`;
+      shroudHeaders["X-Shroud-Api-Key"] = "vault://" + vaultId + "/" + vaultPath;
     } else if (inlineKey) {
-      headers["X-Shroud-Api-Key"] = inlineKey;
+      shroudHeaders["X-Shroud-Api-Key"] = inlineKey;
     }
   }
 
-  const openai = createOpenAI({
-    apiKey: agentKey || "shroud",
-    baseURL: shroudBaseURL,
-    headers,
-  });
+  const openaiMessages = buildShroudOpenAIMessages(
+    convertToCoreMessages(messages),
+  );
 
-  const result = streamText({
-    model: openai(defaultModel),
-    system:
-      "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
-    messages: convertToCoreMessages(messages),
-    onError({ error }) {
-      console.error("[api/chat] streamText error:", error);
+  return createDataStreamResponse({
+    async execute(dataStream) {
+      const r = await shroudChatCompletionNonStream(
+        openaiMessages,
+        shroudHeaders,
+      );
+      if (!r.ok) {
+        let msg = r.body;
+        try {
+          const j = JSON.parse(r.body) as { error?: { message?: string } };
+          if (j?.error?.message) msg = j.error.message;
+        } catch {
+          /* keep raw */
+        }
+        throw new Error(
+          "Shroud " +
+            r.status +
+            ": " +
+            msg.slice(0, 2000) +
+            (r.body.length > 2000 ? "…" : ""),
+        );
+      }
+      const text = r.text;
+      for (let i = 0; i < text.length; i += STREAM_CHUNK) {
+        dataStream.write(
+          formatDataStreamPart("text", text.slice(i, i + STREAM_CHUNK)),
+        );
+      }
+      dataStream.write(
+        formatDataStreamPart("finish_message", {
+          finishReason: "stop",
+          usage: undefined,
+        }),
+      );
+    },
+    onError(error) {
+      console.error("[api/chat] Shroud stream error:", error);
+      return error instanceof Error ? error.message : String(error);
     },
   });
-
-  return result.toDataStreamResponse();
 }
 `;
 }
@@ -1640,6 +1815,9 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
     deps["@1claw/sdk"] = "latest";
   }
+  if (config.llm === "oneclaw") {
+    deps["@ai-sdk/google"] = "^1.0.0";
+  }
 
   file(
     pkg,
@@ -1675,11 +1853,16 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
     `const path = require("path");
 const { loadEnvConfig } = require("@next/env");
 
+// Monorepo app root (…/packages/nextjs → repo root). Avoids wrong inference when a parent folder also has a lockfile.
+const projectRoot = path.join(__dirname, "..", "..");
+
 // Load repo-root .env (ONECLAW_VAULT_ID, RPC_URL, …). Next only auto-loads env from packages/nextjs/ otherwise.
-loadEnvConfig(path.join(__dirname, "..", ".."));
+loadEnvConfig(projectRoot);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Silence "multiple lockfiles" / wrong workspace root when developing inside a nested monorepo.
+  outputFileTracingRoot: projectRoot,
   async redirects() {
     return [
       {
@@ -1802,9 +1985,15 @@ function viteApiRouteOneClawShroud(
   billingModeDefault: ShroudBillingMode,
 ): string {
   const modelFallback = shroudDefaultModel(upstream);
-  return `import express from "express";
-import { convertToCoreMessages, streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+  return `import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import express from "express";
+import {
+  convertToCoreMessages,
+  pipeDataStreamToResponse,
+  formatDataStreamPart,
+  streamText,
+  type CoreMessage,
+} from "ai";
 import "dotenv/config";
 
 const shroudBaseURL =
@@ -1819,6 +2008,12 @@ const defaultModel =
 const billingMode =
   (process.env.SHROUD_BILLING_MODE as "token_billing" | "provider_api_key") ||
   "${billingModeDefault}";
+
+const CHAT_SYSTEM =
+  "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+
+const STREAM_CHUNK =
+  Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
 
 const ONECLAW_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1885,6 +2080,117 @@ function validateShroudEnvExpress(res) {
   return { agentId, agentKey };
 }
 
+function coreContentToText(content: CoreMessage["content"]): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("");
+}
+
+function buildShroudOpenAIMessages(core: CoreMessage[]): Array<{
+  role: "system" | "user" | "assistant";
+  content: string;
+}> {
+  const out: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [{ role: "system", content: CHAT_SYSTEM }];
+  for (const m of core) {
+    if (m.role === "system") continue;
+    if (m.role === "user" || m.role === "assistant") {
+      out.push({ role: m.role, content: coreContentToText(m.content) });
+    }
+  }
+  return out;
+}
+
+async function readVaultSecretPlaintext(vaultId, secretPath, agentId, agentApiKey) {
+  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
+    /\\/$/,
+    "",
+  );
+  const userApiKey = normalizeOneclawEnvValue(process.env.ONECLAW_API_KEY);
+  let token;
+  if (userApiKey) {
+    const tr = await fetch(base + "/v1/auth/api-key-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: userApiKey }),
+    });
+    if (!tr.ok) return null;
+    token = (await tr.json()).access_token;
+  } else {
+    const tr = await fetch(base + "/v1/auth/agent-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: agentId, api_key: agentApiKey }),
+    });
+    if (!tr.ok) return null;
+    token = (await tr.json()).access_token;
+  }
+  const encPath = encodeURIComponent(secretPath);
+  const res = await fetch(
+    base + "/v1/vaults/" + vaultId + "/secrets/" + encPath,
+    { headers: { Authorization: "Bearer " + token } },
+  );
+  if (!res.ok) return null;
+  const j = await res.json();
+  return typeof j.value === "string" ? j.value.trim() : null;
+}
+
+async function resolveGoogleGeminiApiKey(agentId, agentKey) {
+  const inline =
+    (process.env.SHROUD_PROVIDER_API_KEY || "").trim() ||
+    (process.env.GOOGLE_GENERATIVE_AI_API_KEY || "").trim();
+  if (inline) return inline;
+  const vaultId = (process.env.ONECLAW_VAULT_ID || "").trim();
+  const vaultPath =
+    (process.env.SHROUD_PROVIDER_VAULT_PATH || "").trim() || "api-keys/google";
+  if (!vaultId) return null;
+  return readVaultSecretPlaintext(vaultId, vaultPath, agentId, agentKey);
+}
+
+function sendGemini503(res) {
+  res.status(503).json({
+    error:
+      "Shroud’s Gemini path rejects OpenAI-shaped JSON. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or store your Gemini key in the vault (default path api-keys/google) with ONECLAW_VAULT_ID and ONECLAW_API_KEY (or an agent that can read it).",
+  });
+}
+
+async function shroudChatCompletionNonStream(
+  openaiMessages: Array<{ role: string; content: string }>,
+  shroudHeaders: Record<string, string>,
+): Promise<{ ok: true; text: string } | { ok: false; status: number; body: string }> {
+  const base = shroudBaseURL.replace(/\\/$/, "");
+  const url = base + "/chat/completions";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...shroudHeaders,
+    },
+    body: JSON.stringify({
+      model: defaultModel,
+      messages: openaiMessages,
+    }),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    return { ok: false, status: res.status, body: raw };
+  }
+  try {
+    const data = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string | null } }>;
+    };
+    const c = data.choices?.[0]?.message?.content;
+    const text = typeof c === "string" ? c : c == null ? "" : String(c);
+    return { ok: true, text };
+  } catch {
+    return { ok: false, status: 502, body: "Invalid JSON from Shroud" };
+  }
+}
+
 const app = express();
 app.use(express.json());
 
@@ -1899,8 +2205,31 @@ app.post("/api/chat", async (req, res) => {
   if (!creds) return;
   const { agentId, agentKey } = creds;
 
-  const headers: Record<string, string> = {
-    "X-Shroud-Agent-Key": \`\${agentId}:\${agentKey}\`,
+  const providerLC = shroudProvider.toLowerCase();
+  if (
+    (providerLC === "google" || providerLC === "gemini") &&
+    process.env.SHROUD_DISABLE_GEMINI_DIRECT !== "1"
+  ) {
+    const geminiKey = await resolveGoogleGeminiApiKey(agentId, agentKey);
+    if (geminiKey) {
+      const google = createGoogleGenerativeAI({ apiKey: geminiKey });
+      const result = streamText({
+        model: google(defaultModel),
+        system: CHAT_SYSTEM,
+        messages: convertToCoreMessages(messages),
+        onError({ error }) {
+          console.error("[api/chat] Gemini (direct) error:", error);
+        },
+      });
+      result.pipeDataStreamToResponse(res);
+      return;
+    }
+    sendGemini503(res);
+    return;
+  }
+
+  const shroudHeaders: Record<string, string> = {
+    "X-Shroud-Agent-Key": agentId + ":" + agentKey,
     "X-Shroud-Provider": shroudProvider,
   };
 
@@ -1909,29 +2238,56 @@ app.post("/api/chat", async (req, res) => {
     const vaultPath = (process.env.SHROUD_PROVIDER_VAULT_PATH || "").trim();
     const inlineKey = (process.env.SHROUD_PROVIDER_API_KEY || "").trim();
     if (vaultId && vaultPath) {
-      headers["X-Shroud-Api-Key"] = \`vault://\${vaultId}/\${vaultPath}\`;
+      shroudHeaders["X-Shroud-Api-Key"] = "vault://" + vaultId + "/" + vaultPath;
     } else if (inlineKey) {
-      headers["X-Shroud-Api-Key"] = inlineKey;
+      shroudHeaders["X-Shroud-Api-Key"] = inlineKey;
     }
   }
 
-  const openai = createOpenAI({
-    apiKey: agentKey || "shroud",
-    baseURL: shroudBaseURL,
-    headers,
-  });
+  const openaiMessages = buildShroudOpenAIMessages(
+    convertToCoreMessages(messages),
+  );
 
-  const result = streamText({
-    model: openai(defaultModel),
-    system:
-      "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
-    messages: convertToCoreMessages(messages),
-    onError({ error }) {
-      console.error("[api/chat] streamText error:", error);
+  pipeDataStreamToResponse(res, {
+    async execute(dataStream) {
+      const r = await shroudChatCompletionNonStream(
+        openaiMessages,
+        shroudHeaders,
+      );
+      if (!r.ok) {
+        let msg = r.body;
+        try {
+          const j = JSON.parse(r.body) as { error?: { message?: string } };
+          if (j?.error?.message) msg = j.error.message;
+        } catch {
+          /* keep raw */
+        }
+        throw new Error(
+          "Shroud " +
+            r.status +
+            ": " +
+            msg.slice(0, 2000) +
+            (r.body.length > 2000 ? "…" : ""),
+        );
+      }
+      const text = r.text;
+      for (let i = 0; i < text.length; i += STREAM_CHUNK) {
+        dataStream.write(
+          formatDataStreamPart("text", text.slice(i, i + STREAM_CHUNK)),
+        );
+      }
+      dataStream.write(
+        formatDataStreamPart("finish_message", {
+          finishReason: "stop",
+          usage: undefined,
+        }),
+      );
+    },
+    onError(error) {
+      console.error("[api/chat] Shroud stream error:", error);
+      return error instanceof Error ? error.message : String(error);
     },
   });
-
-  result.pipeDataStreamToResponse(res);
 });
 
 app.listen(3001, () => console.log("API server on http://localhost:3001"));
@@ -2093,6 +2449,9 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
 
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
     deps["@1claw/sdk"] = "latest";
+  }
+  if (config.llm === "oneclaw") {
+    deps["@ai-sdk/google"] = "^1.0.0";
   }
 
   file(

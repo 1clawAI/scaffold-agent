@@ -447,6 +447,12 @@ async function main() {
   }
   await displayAccounts(accounts);
 
+  if (!agent) {
+    info(
+      `Only a ${chalk.bold("Deployer")} QR is shown — you chose ${chalk.bold("No")} for ${chalk.bold("Generate Agent Identity")}, so there is no on-chain ${chalk.bold("AGENT_ADDRESS")} to fund. QR codes are for ${chalk.bold("Ethereum addresses")} (e.g. phone wallet). Your ${chalk.bold("1Claw Agent ID")} (UUID) is for ${chalk.bold("Shroud/API")}, not a second QR. Want an agent wallet + second QR later: run ${chalk.cyan("just generate")} in the project (agent path) or create a new project with ${chalk.bold("Yes")} for agent identity.`,
+    );
+  }
+
   if (chain !== "none") {
     info(
       "Local: with just chain running, we try to auto-fund deployer (+ agent). Otherwise: just fund → just deploy. For live networks, fund the addresses above.",
