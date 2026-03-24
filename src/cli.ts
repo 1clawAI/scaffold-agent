@@ -266,6 +266,11 @@ async function main() {
 
   if (llm === "oneclaw" && shroudBillingMode === "token_billing") {
     info("No provider API key stored — Shroud uses 1Claw LLM Token Billing");
+    if (shroudUpstream === "google" || shroudUpstream === "gemini") {
+      info(
+        "Google/Gemini + token billing: chat goes through Shroud (no GOOGLE_GENERATIVE_AI_API_KEY in this repo). Enable LLM token billing for this agent on 1claw.xyz.",
+      );
+    }
   } else if (
     llm === "oneclaw" &&
     shroudBillingMode === "provider_api_key" &&

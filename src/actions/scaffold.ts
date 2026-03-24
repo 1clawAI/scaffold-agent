@@ -2178,8 +2178,10 @@ export default function DebugPage() {
  * 1Claw Shroud LLM proxy — OpenAI-compatible /v1/chat/completions.
  * @see https://docs.1claw.xyz/docs/guides/shroud
  *
- * SHROUD_BILLING_MODE=token_billing → no X-Shroud-Api-Key (enable billing on 1claw.xyz).
- * SHROUD_BILLING_MODE=provider_api_key → vault://… from api-keys/{provider} or SHROUD_PROVIDER_API_KEY.
+ * SHROUD_BILLING_MODE=token_billing → no X-Shroud-Api-Key (enable billing on 1claw.xyz). Google/Gemini upstream
+ *   uses Shroud when no Google key is configured; with a key, direct Generative AI is used (optional BYOK).
+ * SHROUD_BILLING_MODE=provider_api_key → vault://… from api-keys/{provider} or SHROUD_PROVIDER_API_KEY; Gemini
+ *   requires a Google key for the direct path (503 if missing).
  */
 function nextApiRouteOneClawShroud(
   upstream: ShroudUpstreamProvider,
@@ -2372,7 +2374,7 @@ function gemini503() {
   return new Response(
     JSON.stringify({
       error:
-        "Shroud’s Gemini path rejects OpenAI-shaped JSON. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or store your Gemini key in the vault (default path api-keys/google) with ONECLAW_VAULT_ID and ONECLAW_API_KEY (or an agent that can read it).",
+        "SHROUD_BILLING_MODE=provider_api_key needs a Google API key for the optional direct Gemini API path. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or store the key in the vault (e.g. api-keys/google) with ONECLAW_VAULT_ID. If you use 1Claw token billing only, set SHROUD_BILLING_MODE=token_billing — chat will call Shroud without a Google key in this app.",
     }),
     { status: 503, headers: { "Content-Type": "application/json" } },
   );
@@ -2459,7 +2461,10 @@ export async function POST(req: Request) {
       });
       return result.toDataStreamResponse();
     }
-    return gemini503();
+    if (billingMode === "provider_api_key") {
+      return gemini503();
+    }
+    // token_billing: no BYOK Google key — use Shroud (1Claw-billed) for Gemini
   }
 
   const shroudHeaders: Record<string, string> = {
@@ -3235,7 +3240,7 @@ async function resolveGoogleGeminiApiKey(agentId, agentKey) {
 function sendGemini503(res) {
   res.status(503).json({
     error:
-      "Shroud’s Gemini path rejects OpenAI-shaped JSON. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or store your Gemini key in the vault (default path api-keys/google) with ONECLAW_VAULT_ID and ONECLAW_API_KEY (or an agent that can read it).",
+      "SHROUD_BILLING_MODE=provider_api_key needs a Google API key for the optional direct Gemini path. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or vault api-keys/google with ONECLAW_VAULT_ID. For token billing only, use SHROUD_BILLING_MODE=token_billing so chat calls Shroud without a Google key in this app.",
   });
 }
 
@@ -3313,8 +3318,10 @@ app.post("/api/chat", async (req, res) => {
       result.pipeDataStreamToResponse(res);
       return;
     }
-    sendGemini503(res);
-    return;
+    if (billingMode === "provider_api_key") {
+      sendGemini503(res);
+      return;
+    }
   }
 
   const shroudHeaders: Record<string, string> = {
