@@ -1165,6 +1165,7 @@ export function cn(...inputs: ClassValue[]) {
 `;
 
 const BUTTON_TSX = `import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -1191,12 +1192,21 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => (
-    <button className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
-  ),
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button";
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    );
+  },
 );
 Button.displayName = "Button";
 
@@ -1615,14 +1625,18 @@ import { targetNetwork } from "@/lib/networks";
 
 /**
  * Localhost-only: send ETH from Anvil account #0 via POST /api/faucet (same dev key as just fund).
+ * Wallet state is omitted until mount so SSR + first client paint match (avoids hydration mismatch with wagmi).
  */
 export function LocalFaucetButton() {
-  if (targetNetwork !== "localhost") return null;
-
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const [mounted, setMounted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -1630,6 +1644,17 @@ export function LocalFaucetButton() {
     const t = window.setTimeout(() => setToast(null), ms);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  if (targetNetwork !== "localhost") return null;
+
+  if (!mounted) {
+    return (
+      <div
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/50 animate-pulse"
+        aria-hidden
+      />
+    );
+  }
 
   const wrongChain = isConnected && chainId !== hardhat.id;
   const disabled = !isConnected || !address || wrongChain || busy;
@@ -2692,6 +2717,7 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
     clsx: "^2.1.0",
     "tailwind-merge": "^2.5.0",
     "lucide-react": "^0.460.0",
+    "@radix-ui/react-slot": "^1.1.0",
     "agent0-sdk": "^1.7.1",
     viem: "^2.21.0",
     wagmi: "^2.14.0",
@@ -2750,10 +2776,11 @@ const projectRoot = path.join(__dirname, "..", "..");
 // Load repo-root .env (ONECLAW_VAULT_ID, RPC_URL, …). Next only auto-loads env from packages/nextjs/ otherwise.
 loadEnvConfig(projectRoot);
 
-const nodeBuiltinStub = path.join(__dirname, "lib", "node-builtins-browser-stub.cjs");
 // RainbowKit / wagmi → MetaMask SDK + WalletConnect pull optional deps that break the Next browser bundle.
 const stubAsyncStorage = path.join(__dirname, "lib", "stub-async-storage.cjs");
 const stubPinoPretty = path.join(__dirname, "lib", "stub-pino-pretty.cjs");
+/** Turbopack resolveAlias must be relative to this config file — absolute paths break (./Users/…). */
+const nodeBuiltinStubRel = "./lib/node-builtins-browser-stub.cjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -2804,15 +2831,15 @@ const nextConfig = {
     config.resolve.alias = nextAlias;
     return config;
   },
-  // next dev --turbo: paths relative to this package (packages/nextjs)
+  // next dev --turbo: aliases must be paths relative to next.config.js (not path.join absolutes).
   turbopack: {
     resolveAlias: {
-      fs: nodeBuiltinStub,
-      net: nodeBuiltinStub,
-      tls: nodeBuiltinStub,
-      dns: nodeBuiltinStub,
-      child_process: nodeBuiltinStub,
-      path: nodeBuiltinStub,
+      fs: nodeBuiltinStubRel,
+      net: nodeBuiltinStubRel,
+      tls: nodeBuiltinStubRel,
+      dns: nodeBuiltinStubRel,
+      child_process: nodeBuiltinStubRel,
+      path: nodeBuiltinStubRel,
       "@react-native-async-storage/async-storage": "./lib/stub-async-storage.cjs",
       "pino-pretty": "./lib/stub-pino-pretty.cjs",
     },
@@ -3534,6 +3561,7 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
     clsx: "^2.1.0",
     "tailwind-merge": "^2.5.0",
     "lucide-react": "^0.460.0",
+    "@radix-ui/react-slot": "^1.1.0",
     "agent0-sdk": "^1.7.1",
     viem: "^2.21.0",
     wagmi: "^2.14.0",
