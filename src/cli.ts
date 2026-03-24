@@ -145,7 +145,7 @@ function defaultShroudModel(upstream: ShroudUpstreamProvider): string {
       return "claude-sonnet-4-20250514";
     case "google":
     case "gemini":
-      return "gemini-2.5-flash";
+      return "gemini-2.0-flash";
     case "mistral":
       return "mistral-large-latest";
     case "cohere":
@@ -269,6 +269,9 @@ async function main() {
     if (shroudUpstream === "google" || shroudUpstream === "gemini") {
       info(
         "Google/Gemini + token billing: chat goes through Shroud (no GOOGLE_GENERATIVE_AI_API_KEY in this repo). Enable LLM token billing for this agent on 1claw.xyz.",
+      );
+      info(
+        `Default Shroud model is ${chalk.cyan("gemini-2.0-flash")} (Stripe AI Gateway / Shroud allowlist). Set SHROUD_DEFAULT_MODEL if you need another id listed in the Shroud docs.`,
       );
     }
   } else if (

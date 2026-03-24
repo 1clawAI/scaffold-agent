@@ -47,11 +47,17 @@ import {
 const AMPERSEND_SDK_VERSION = "^0.0.2";
 
 /**
- * Default Gemini model for the Google AI Studio API (Generative Language API).
- * Override with GOOGLE_GENERATIVE_AI_MODEL. Older defaults (e.g. gemini-2.0-flash) can show
- * free-tier quota 0 for some projects; 2.5 Flash is the current general-purpose default.
+ * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
+ * Override with GOOGLE_GENERATIVE_AI_MODEL.
  */
 const GEMINI_GOOGLE_AI_MODEL_DEFAULT = "gemini-2.5-flash";
+
+/**
+ * Default Gemini model id sent to Shroud (`/v1/chat/completions`). Must match Shroud + Stripe AI
+ * Gateway allowlists — see https://docs.1claw.xyz/docs/guides/shroud (`gemini-2.0-flash` in examples).
+ * Using e.g. gemini-2.5-flash here can 404 with Stripe-branded errors under LLM token billing.
+ */
+const SHROUD_GEMINI_MODEL_DEFAULT = "gemini-2.0-flash";
 
 function ampersendReadmeMarkdown(config: ScaffoldConfig): string {
   const lines = [
@@ -196,7 +202,7 @@ function shroudDefaultModel(upstream: ShroudUpstreamProvider): string {
       return "claude-sonnet-4-20250514";
     case "google":
     case "gemini":
-      return GEMINI_GOOGLE_AI_MODEL_DEFAULT;
+      return SHROUD_GEMINI_MODEL_DEFAULT;
     case "mistral":
       return "mistral-large-latest";
     case "cohere":
@@ -1870,6 +1876,7 @@ export default function Home() {
             }
           }
           const t = display.toLowerCase();
+          const shroudHttpErr = /^shroud\s+\d{3}/i.test(display.trim());
           const geminiOrQuota =
             /quota|429|resource_exhausted|gemini|google|generativelanguage/.test(t);
           const oneclawish = /oneclaw|shroud|oneclaw_agent|x-shroud/.test(t);
@@ -1879,9 +1886,29 @@ export default function Home() {
               role="alert"
             >
               <p className="whitespace-pre-wrap font-medium">{display}</p>
-              {geminiOrQuota ? (
+              {shroudHttpErr &&
+              (/unrecognized request url|generatecontent|stripe\.com/.test(t) ||
+                /gemini/.test(t)) ? (
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  For Google Gemini: check{" "}
+                  Shroud with <strong className="text-foreground">LLM token billing</strong> routes models
+                  through Stripe&apos;s AI gateway; some ids (e.g.{" "}
+                  <code className="rounded bg-muted px-1">gemini-2.5-flash</code>) may 404. Try{" "}
+                  <code className="rounded bg-muted px-1">SHROUD_DEFAULT_MODEL=gemini-2.0-flash</code>{" "}
+                  (see{" "}
+                  <a
+                    href="https://docs.1claw.xyz/docs/guides/shroud"
+                    className="underline hover:text-foreground"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Shroud docs
+                  </a>
+                  ) and check agent <code className="rounded bg-muted px-1">allowed_models</code> on
+                  1claw.xyz.
+                </p>
+              ) : geminiOrQuota ? (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  For Google Gemini (direct API / BYOK): check{" "}
                   <a
                     href="https://ai.google.dev/gemini-api/docs/rate-limits"
                     className="underline hover:text-foreground"
@@ -2203,8 +2230,20 @@ const shroudBaseURL =
 const shroudProvider =
   process.env.SHROUD_LLM_PROVIDER || "${upstream}";
 
-const defaultModel =
-  process.env.SHROUD_DEFAULT_MODEL || "${modelFallback}";
+const shroudModelFallback = "${modelFallback}";
+/** Body + X-Shroud-Model; Stripe AI Gateway often 404s on gemini-2.5-flash — remap for Shroud only. */
+const defaultModel = (() => {
+  const raw =
+    (process.env.SHROUD_DEFAULT_MODEL || "").trim() || shroudModelFallback;
+  const p = shroudProvider.toLowerCase();
+  if (
+    (p === "google" || p === "gemini") &&
+    raw === "gemini-2.5-flash"
+  ) {
+    return "gemini-2.0-flash";
+  }
+  return raw;
+})();
 
 /** Model ID passed to @ai-sdk/google when calling Gemini directly (overrides SHROUD_DEFAULT_MODEL for that path only). */
 const geminiDirectModel =
@@ -2470,6 +2509,7 @@ export async function POST(req: Request) {
   const shroudHeaders: Record<string, string> = {
     "X-Shroud-Agent-Key": agentId + ":" + agentKey,
     "X-Shroud-Provider": shroudProvider,
+    "X-Shroud-Model": defaultModel,
   };
 
   if (billingMode === "provider_api_key") {
@@ -3085,8 +3125,19 @@ const shroudBaseURL =
 const shroudProvider =
   process.env.SHROUD_LLM_PROVIDER || "${upstream}";
 
-const defaultModel =
-  process.env.SHROUD_DEFAULT_MODEL || "${modelFallback}";
+const shroudModelFallback = "${modelFallback}";
+const defaultModel = (() => {
+  const raw =
+    (process.env.SHROUD_DEFAULT_MODEL || "").trim() || shroudModelFallback;
+  const p = shroudProvider.toLowerCase();
+  if (
+    (p === "google" || p === "gemini") &&
+    raw === "gemini-2.5-flash"
+  ) {
+    return "gemini-2.0-flash";
+  }
+  return raw;
+})();
 
 const geminiDirectModel =
   (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || defaultModel;
@@ -3327,6 +3378,7 @@ app.post("/api/chat", async (req, res) => {
   const shroudHeaders: Record<string, string> = {
     "X-Shroud-Agent-Key": agentId + ":" + agentKey,
     "X-Shroud-Provider": shroudProvider,
+    "X-Shroud-Model": defaultModel,
   };
 
   if (billingMode === "provider_api_key") {
