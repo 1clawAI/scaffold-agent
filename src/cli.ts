@@ -145,7 +145,7 @@ function defaultShroudModel(upstream: ShroudUpstreamProvider): string {
       return "claude-sonnet-4-20250514";
     case "google":
     case "gemini":
-      return "gemini-2.0-flash";
+      return "gemini-2.5-flash";
     case "mistral":
       return "mistral-large-latest";
     case "cohere":

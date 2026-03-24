@@ -44,6 +44,13 @@ import {
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "^0.0.2";
 
+/**
+ * Default Gemini model for the Google AI Studio API (Generative Language API).
+ * Override with GOOGLE_GENERATIVE_AI_MODEL. Older defaults (e.g. gemini-2.0-flash) can show
+ * free-tier quota 0 for some projects; 2.5 Flash is the current general-purpose default.
+ */
+const GEMINI_GOOGLE_AI_MODEL_DEFAULT = "gemini-2.5-flash";
+
 function ampersendReadmeMarkdown(config: ScaffoldConfig): string {
   const lines = [
     "# Ampersend (x402 / agent payments)",
@@ -135,7 +142,7 @@ function llmModelCall(llm: ThirdPartyLlm): string {
     case "openai":
       return 'openai("gpt-4o")';
     case "gemini":
-      return 'google("gemini-2.0-flash")';
+      return `google("${GEMINI_GOOGLE_AI_MODEL_DEFAULT}")`;
     case "anthropic":
       return 'anthropic("claude-sonnet-4-20250514")';
   }
@@ -169,7 +176,7 @@ function llmDefaultModel(llm: ThirdPartyLlm): string {
     case "openai":
       return '"gpt-4o"';
     case "gemini":
-      return '"gemini-2.0-flash"';
+      return `"${GEMINI_GOOGLE_AI_MODEL_DEFAULT}"`;
     case "anthropic":
       return '"claude-sonnet-4-20250514"';
   }
@@ -187,7 +194,7 @@ function shroudDefaultModel(upstream: ShroudUpstreamProvider): string {
       return "claude-sonnet-4-20250514";
     case "google":
     case "gemini":
-      return "gemini-2.0-flash";
+      return GEMINI_GOOGLE_AI_MODEL_DEFAULT;
     case "mistral":
       return "mistral-large-latest";
     case "cohere":
@@ -2086,6 +2093,10 @@ const shroudProvider =
 const defaultModel =
   process.env.SHROUD_DEFAULT_MODEL || "${modelFallback}";
 
+/** Model ID passed to @ai-sdk/google when calling Gemini directly (overrides SHROUD_DEFAULT_MODEL for that path only). */
+const geminiDirectModel =
+  (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || defaultModel;
+
 const billingMode =
   (process.env.SHROUD_BILLING_MODE as "token_billing" | "provider_api_key") ||
   "${billingModeDefault}";
@@ -2320,10 +2331,18 @@ export async function POST(req: Request) {
     if (geminiKey) {
       const google = createGoogleGenerativeAI({ apiKey: geminiKey });
       const result = streamText({
-        model: google(defaultModel),
+        model: google(geminiDirectModel),
         system: CHAT_SYSTEM,
         messages: convertToCoreMessages(messages),
         onError({ error }) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (
+            /quota|429|RESOURCE_EXHAUSTED|exceeded your current quota/i.test(msg)
+          ) {
+            console.error(
+              "[api/chat] Gemini quota/rate limit — set GOOGLE_GENERATIVE_AI_MODEL (e.g. gemini-2.5-flash) or SHROUD_DEFAULT_MODEL, enable billing: https://ai.google.dev/gemini-api/docs/rate-limits",
+            );
+          }
           console.error("[api/chat] Gemini (direct) error:", error);
         },
       });
@@ -2397,11 +2416,21 @@ export async function POST(req: Request) {
 }
 
 function nextApiRouteVaultThirdParty(llm: ThirdPartyLlm): string {
+  const geminiModelBlock =
+    llm === "gemini"
+      ? `const geminiModelId =
+  (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || "${GEMINI_GOOGLE_AI_MODEL_DEFAULT}";
+
+`
+      : "";
+  const modelArg =
+    llm === "gemini" ? "geminiModelId" : llmDefaultModel(llm);
+
   return `import { convertToCoreMessages, streamText, type Message } from "ai";
 ${llmFactoryImport(llm)}
 import { createClient } from "@1claw/sdk";
 
-const client = createClient({
+${geminiModelBlock}const client = createClient({
   baseUrl: "https://api.1claw.xyz",
   apiKey: process.env.ONECLAW_API_KEY!,
 });
@@ -2471,7 +2500,7 @@ export async function POST(req: Request) {
   const provider = ${llmFactoryCall(llm)};
 
   const result = streamText({
-    model: provider(${llmDefaultModel(llm)}),
+    model: provider(${modelArg}),
     system:
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
     messages: convertToCoreMessages(messages),
@@ -2486,9 +2515,19 @@ export async function POST(req: Request) {
 }
 
 function nextApiRouteDirectThirdParty(llm: ThirdPartyLlm): string {
+  const geminiModelBlock =
+    llm === "gemini"
+      ? `const geminiModelId =
+  (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || "${GEMINI_GOOGLE_AI_MODEL_DEFAULT}";
+
+`
+      : "";
+  const modelExpr =
+    llm === "gemini" ? "google(geminiModelId)" : llmModelCall(llm);
+
   return `import { convertToCoreMessages, streamText, type Message } from "ai";
 ${llmModelImport(llm)}
-
+${geminiModelBlock}
 export async function POST(req: Request) {
   let messages: Message[];
   try {
@@ -2508,7 +2547,7 @@ export async function POST(req: Request) {
   }
 
   const result = streamText({
-    model: ${llmModelCall(llm)},
+    model: ${modelExpr},
     system:
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
     messages: convertToCoreMessages(messages),
@@ -2910,6 +2949,9 @@ const shroudProvider =
 const defaultModel =
   process.env.SHROUD_DEFAULT_MODEL || "${modelFallback}";
 
+const geminiDirectModel =
+  (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || defaultModel;
+
 const billingMode =
   (process.env.SHROUD_BILLING_MODE as "token_billing" | "provider_api_key") ||
   "${billingModeDefault}";
@@ -3119,10 +3161,18 @@ app.post("/api/chat", async (req, res) => {
     if (geminiKey) {
       const google = createGoogleGenerativeAI({ apiKey: geminiKey });
       const result = streamText({
-        model: google(defaultModel),
+        model: google(geminiDirectModel),
         system: CHAT_SYSTEM,
         messages: convertToCoreMessages(messages),
         onError({ error }) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (
+            /quota|429|RESOURCE_EXHAUSTED|exceeded your current quota/i.test(msg)
+          ) {
+            console.error(
+              "[api/chat] Gemini quota/rate limit — set GOOGLE_GENERATIVE_AI_MODEL (e.g. gemini-2.5-flash) or SHROUD_DEFAULT_MODEL, enable billing: https://ai.google.dev/gemini-api/docs/rate-limits",
+            );
+          }
           console.error("[api/chat] Gemini (direct) error:", error);
         },
       });
@@ -3200,6 +3250,16 @@ app.listen(3001, () => console.log("API server on http://localhost:3001"));
 }
 
 function viteApiRouteVaultThirdParty(llm: ThirdPartyLlm): string {
+  const geminiModelBlock =
+    llm === "gemini"
+      ? `const geminiModelId =
+  (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || "${GEMINI_GOOGLE_AI_MODEL_DEFAULT}";
+
+`
+      : "";
+  const modelArg =
+    llm === "gemini" ? "geminiModelId" : llmDefaultModel(llm);
+
   return `import express from "express";
 import { convertToCoreMessages, streamText } from "ai";
 ${llmFactoryImport(llm)}
@@ -3209,7 +3269,7 @@ import { createPublicClient, http, formatUnits, erc20Abi } from "viem";
 import { getActiveNetwork } from "../../network-definitions.js";
 import { viemChainForNetwork } from "../../viem-chain.js";
 
-const client = createClient({
+${geminiModelBlock}const client = createClient({
   baseUrl: "https://api.1claw.xyz",
   apiKey: process.env.ONECLAW_API_KEY,
 });
@@ -3269,7 +3329,7 @@ app.post("/api/chat", async (req, res) => {
   const provider = ${llmFactoryCall(llm)};
 
   const result = streamText({
-    model: provider(${llmDefaultModel(llm)}),
+    model: provider(${modelArg}),
     system:
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
     messages: convertToCoreMessages(messages),
@@ -3287,6 +3347,16 @@ app.listen(3001, () => console.log("API server on http://localhost:3001"));
 
 function viteApiRouteDirectThirdParty(llm: ThirdPartyLlm): string {
   const envKey = llmEnvKey(llm);
+  const geminiModelBlock =
+    llm === "gemini"
+      ? `const geminiModelId =
+  (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || "${GEMINI_GOOGLE_AI_MODEL_DEFAULT}";
+
+`
+      : "";
+  const modelExpr =
+    llm === "gemini" ? "google(geminiModelId)" : llmModelCall(llm);
+
   return `import express from "express";
 import { convertToCoreMessages, streamText } from "ai";
 ${llmModelImport(llm)}
@@ -3295,7 +3365,7 @@ import { createPublicClient, http, formatUnits, erc20Abi } from "viem";
 import { getActiveNetwork } from "../../network-definitions.js";
 import { viemChainForNetwork } from "../../viem-chain.js";
 
-const app = express();
+${geminiModelBlock}const app = express();
 app.use(express.json());
 
 app.post("/api/chat", async (req, res) => {
@@ -3306,7 +3376,7 @@ app.post("/api/chat", async (req, res) => {
   }
 
   const result = streamText({
-    model: ${llmModelCall(llm)},
+    model: ${modelExpr},
     system:
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
     messages: convertToCoreMessages(messages),
