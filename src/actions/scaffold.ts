@@ -2635,7 +2635,7 @@ const nextConfig = {
     // MetaMask SDK + WalletConnect: optional deps break resolution from hoisted node_modules — replace at resolve time.
     config.plugins.push(
       new webpackApi.NormalModuleReplacementPlugin(
-        /^@react-native-async-storage\/async-storage$/,
+        /^@react-native-async-storage\\/async-storage$/,
         stubAsyncStorage,
       ),
       new webpackApi.NormalModuleReplacementPlugin(/^pino-pretty$/, stubPinoPretty),
