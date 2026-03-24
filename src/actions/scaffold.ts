@@ -32,7 +32,9 @@ import {
   scaffoldConfigSource,
   viteNetworksReexportSource,
 } from "../scaffold-templates/network-config.js";
+import { nextAppRouteLoadingSource } from "../scaffold-templates/next-loading-page.js";
 import { viemChainHelperSource } from "../scaffold-templates/viem-chain.js";
+import { vitePageLoadingSource } from "../scaffold-templates/vite-page-loading.js";
 import {
   burnerAutoConnectSource,
   connectWalletButtonSource,
@@ -1082,7 +1084,11 @@ const SHADCN_CSS = `@tailwind base;
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+  /* Keyboard focus: visible ring without changing mouse click outline behavior */
+  :where(a, button, input, textarea, select, summary):focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
 `;
@@ -1600,7 +1606,7 @@ export async function POST(req: Request) {
 function localFaucetButtonSource(): string {
   return `"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Droplets, Loader2 } from "lucide-react";
 import { useAccount, useChainId } from "wagmi";
 import { hardhat } from "wagmi/chains";
@@ -1616,6 +1622,14 @@ export function LocalFaucetButton() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const ms = toast.kind === "ok" ? 4500 : 8000;
+    const t = window.setTimeout(() => setToast(null), ms);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   const wrongChain = isConnected && chainId !== hardhat.id;
   const disabled = !isConnected || !address || wrongChain || busy;
@@ -1623,6 +1637,7 @@ export function LocalFaucetButton() {
   async function onFaucet() {
     if (!address || disabled) return;
     setBusy(true);
+    setToast(null);
     try {
       const res = await fetch("/api/faucet", {
         method: "POST",
@@ -1635,11 +1650,15 @@ export function LocalFaucetButton() {
       }
       const amt = data.amount ?? "?";
       const sym = data.symbol ?? "ETH";
-      const el = document.activeElement as HTMLElement | null;
-      el?.blur();
-      window.alert("Sent " + amt + " " + sym + " to your wallet (local faucet).");
+      setToast({
+        kind: "ok",
+        text: "Sent " + amt + " " + sym + " to your wallet (local faucet).",
+      });
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e));
+      setToast({
+        kind: "err",
+        text: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusy(false);
     }
@@ -1652,20 +1671,35 @@ export function LocalFaucetButton() {
       : "Mint 10 test ETH from local Anvil account #0";
 
   return (
-    <button
-      type="button"
-      onClick={() => void onFaucet()}
-      disabled={disabled}
-      title={title}
-      className={cn(
-        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-        "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-        "disabled:pointer-events-none disabled:opacity-40",
-      )}
-      aria-label="Local faucet"
-    >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Droplets className="h-4 w-4" />}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => void onFaucet()}
+        disabled={disabled}
+        title={title}
+        className={cn(
+          "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+          "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+          "disabled:pointer-events-none disabled:opacity-40",
+        )}
+        aria-label="Local faucet"
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Droplets className="h-4 w-4" />}
+      </button>
+      {toast ? (
+        <div
+          role="status"
+          className={cn(
+            "fixed bottom-20 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-lg border px-4 py-2 text-sm shadow-lg",
+            toast.kind === "ok"
+              ? "border-border bg-card text-foreground"
+              : "border-destructive/50 bg-destructive/10 text-destructive",
+          )}
+        >
+          {toast.text}
+        </div>
+      ) : null}
+    </>
   );
 }
 `;
@@ -1715,8 +1749,9 @@ function chatPageContent(
           ${lp("/balances")}
           className={${iconBtnClass}}
           title="Balances"
+          aria-label="Balances"
         >
-          <Wallet className="h-4 w-4" />
+          <Wallet className="h-4 w-4" aria-hidden />
         </Link>`
     : "";
   const headerEns = identityLink
@@ -1725,8 +1760,9 @@ function chatPageContent(
           ${lp("/ens")}
           className={${iconBtnClass}}
           title="ENS name for your agent"
+          aria-label="ENS name for your agent"
         >
-          <BadgeCheck className="h-4 w-4" />
+          <BadgeCheck className="h-4 w-4" aria-hidden />
         </Link>`
     : "";
   const headerIdentity = identityLink
@@ -1735,8 +1771,9 @@ function chatPageContent(
           ${lp("/identity")}
           className={${iconBtnClass}}
           title="Agent identity (ERC-8004)"
+          aria-label="Agent identity (ERC-8004)"
         >
-          <Info className="h-4 w-4" />
+          <Info className="h-4 w-4" aria-hidden />
         </Link>`
     : "";
   const headerBug = debugLink
@@ -1745,8 +1782,9 @@ function chatPageContent(
           ${lp("/debug")}
           className={${iconBtnClass}}
           title="Debug contracts"
+          aria-label="Debug contracts"
         >
-          <Bug className="h-4 w-4" />
+          <Bug className="h-4 w-4" aria-hidden />
         </Link>`
     : "";
   const headerIcons = `${headerFaucet}${headerBalances}${headerEns}${headerIdentity}${headerBug}`;
@@ -1776,13 +1814,16 @@ export default function Home() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isLoading]);
 
   return (
     <div className="flex flex-col h-screen">
-      <header className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-          <Bot className="h-4 w-4 text-primary-foreground" />
+      <header
+        className="border-b border-border px-6 py-4 flex items-center gap-3"
+        role="banner"
+      >
+        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
+          <Bot className="h-4 w-4 text-primary-foreground" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-sm font-semibold">${projectName}</h1>
@@ -1790,34 +1831,68 @@ export default function Home() {
         </div>${headerRight}
       </header>
 
-      {error && (
-        <div className="px-6 py-2 text-sm text-destructive bg-destructive/10 border-b border-border space-y-1">
-          <p className="whitespace-pre-wrap font-medium">
-            {(() => {
-              const raw = error.message;
-              const i = raw.indexOf("{");
-              if (i >= 0) {
-                try {
-                  const j = JSON.parse(raw.slice(i));
-                  if (j && typeof j.error === "string") return j.error;
-                } catch {
-                  /* ignore */
-                }
-              }
-              return raw;
-            })()}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Fix .env (or .env.secrets.encrypted), then restart{" "}
-            <code className="rounded bg-muted px-1">next dev</code>.{" "}
-            <code className="rounded bg-muted px-1">ONECLAW_AGENT_ID</code> is the
-            1Claw agent UUID — not{" "}
-            <code className="rounded bg-muted px-1">AGENT_ADDRESS</code>.
-          </p>
-        </div>
-      )}
+      {error &&
+        (() => {
+          const raw = error.message;
+          let display = raw;
+          const i = raw.indexOf("{");
+          if (i >= 0) {
+            try {
+              const j = JSON.parse(raw.slice(i)) as { error?: string };
+              if (j && typeof j.error === "string") display = j.error;
+            } catch {
+              /* keep display */
+            }
+          }
+          const t = display.toLowerCase();
+          const geminiOrQuota =
+            /quota|429|resource_exhausted|gemini|google|generativelanguage/.test(t);
+          const oneclawish = /oneclaw|shroud|oneclaw_agent|x-shroud/.test(t);
+          return (
+            <div
+              className="px-6 py-3 text-sm text-destructive bg-destructive/10 border-b border-border space-y-2"
+              role="alert"
+            >
+              <p className="whitespace-pre-wrap font-medium">{display}</p>
+              {geminiOrQuota ? (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  For Google Gemini: check{" "}
+                  <a
+                    href="https://ai.google.dev/gemini-api/docs/rate-limits"
+                    className="underline hover:text-foreground"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    rate limits and billing
+                  </a>
+                  , set <code className="rounded bg-muted px-1">GOOGLE_GENERATIVE_AI_API_KEY</code>, and
+                  optionally <code className="rounded bg-muted px-1">GOOGLE_GENERATIVE_AI_MODEL</code>.
+                </p>
+              ) : oneclawish ? (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Fix <code className="rounded bg-muted px-1">.env</code> (or encrypted secrets), then restart{" "}
+                  <code className="rounded bg-muted px-1">next dev</code>.{" "}
+                  <code className="rounded bg-muted px-1">ONECLAW_AGENT_ID</code> is the 1Claw agent UUID — not{" "}
+                  <code className="rounded bg-muted px-1">AGENT_ADDRESS</code>.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Check LLM API keys and provider settings in{" "}
+                  <code className="rounded bg-muted px-1">.env</code> (or{" "}
+                  <code className="rounded bg-muted px-1">.env.secrets.encrypted</code>), then restart{" "}
+                  <code className="rounded bg-muted px-1">next dev</code>. Open the Network tab if the chat
+                  request returns 4xx/5xx.
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6">
+      <main
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-6 space-y-6"
+        aria-label="Chat conversation"
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
             <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
@@ -1853,12 +1928,12 @@ export default function Home() {
           </div>
         ))}
         {isLoading && messages[messages.length - 1]?.role === "user" && (
-          <div className="flex gap-3 justify-start">
+          <div className="flex gap-3 justify-start" aria-live="polite" aria-busy="true">
             <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              <Bot className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
             </div>
             <div className="bg-muted rounded-2xl px-4 py-3">
-              <div className="flex space-x-1.5">
+              <div className="flex space-x-1.5" aria-label="Assistant is typing">
                 <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0ms]" />
                 <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:150ms]" />
                 <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:300ms]" />
@@ -1866,19 +1941,30 @@ export default function Home() {
             </div>
           </div>
         )}
-      </div>
+      </main>
 
-      <form onSubmit={handleSubmit} className="border-t border-border p-4 flex gap-3">
+      <form
+        onSubmit={handleSubmit}
+        className="border-t border-border p-4 flex gap-3"
+        aria-label="Send a message to the agent"
+      >
         <Input
           value={input}
           onChange={handleInputChange}
-          placeholder="Send a message..."
+          placeholder="Send a message…"
           className="flex-1"
           disabled={isLoading}
           autoFocus
+          name="message"
+          aria-label="Message text"
         />
-        <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
-          <SendHorizontal className="h-4 w-4" />
+        <Button
+          type="submit"
+          size="icon"
+          disabled={isLoading || !input.trim()}
+          aria-label="Send message"
+        >
+          <SendHorizontal className="h-4 w-4" aria-hidden />
         </Button>
       </form>
     </div>
@@ -2633,7 +2719,7 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
         version: "0.1.0",
         private: true,
         scripts: {
-          dev: "next dev",
+          dev: "next dev --turbo",
           build: "next build",
           start: "next start",
         },
@@ -2675,6 +2761,10 @@ const nextConfig = {
   outputFileTracingRoot: projectRoot,
   // Hide the Next.js dev indicator / dev tools entry in the browser (build & runtime errors still show).
   devIndicators: false,
+  // Tree-shake lucide barrel imports → smaller client chunks (faster subpage loads).
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   transpilePackages: [
     "agent0-sdk",
     "@rainbow-me/rainbowkit",
@@ -2848,6 +2938,13 @@ module.exports = function stubPinoPretty() {
 
   file(pkg, "app/providers.tsx", nextAppProvidersSource());
 
+  const routeLoading = nextAppRouteLoadingSource();
+  file(pkg, "app/loading.tsx", routeLoading);
+  file(pkg, "app/identity/loading.tsx", routeLoading);
+  file(pkg, "app/balances/loading.tsx", routeLoading);
+  file(pkg, "app/debug/loading.tsx", routeLoading);
+  file(pkg, "app/ens/loading.tsx", routeLoading);
+
   file(
     pkg,
     "app/layout.tsx",
@@ -2864,8 +2961,18 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased">
-        <Providers>{children}</Providers>
+      <body>
+        <Providers>
+          <a
+            href="#site-main"
+            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            Skip to main content
+          </a>
+          <div id="site-main" className="min-h-screen">
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );
@@ -3568,6 +3675,7 @@ interface ImportMeta {
   file(pkg, "src/lib/wagmi-config.ts", wagmiConfigSource(config.projectName, "vite"));
   file(pkg, "src/lib/web3-providers.tsx", web3ProvidersSource("vite"));
   file(pkg, "src/components/ConnectWalletButton.tsx", connectWalletButtonSource());
+  file(pkg, "src/components/PageLoading.tsx", vitePageLoadingSource());
   file(pkg, "src/components/ui/button.tsx", BUTTON_TSX);
   file(pkg, "src/components/ui/input.tsx", INPUT_TSX);
   file(pkg, "src/index.css", SHADCN_CSS);
@@ -3593,24 +3701,37 @@ interface ImportMeta {
   file(
     pkg,
     "src/main.tsx",
-    `import { createRoot } from "react-dom/client";
+    `import { lazy, Suspense } from "react";
+import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Web3Providers } from "./lib/web3-providers";
+import { PageLoading } from "./components/PageLoading";
 import { Chat } from "./Chat";
-import IdentityPage from "./IdentityPage";
-import EnsPage from "./EnsPage";
-import BalancesPage from "./BalancesPage";
 import "./index.css";
+
+const IdentityPage = lazy(() => import("./IdentityPage"));
+const EnsPage = lazy(() => import("./EnsPage"));
+const BalancesPage = lazy(() => import("./BalancesPage"));
 
 createRoot(document.getElementById("root")!).render(
   <Web3Providers>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Chat />} />
-        <Route path="/identity" element={<IdentityPage />} />
-        <Route path="/ens" element={<EnsPage />} />
-        <Route path="/balances" element={<BalancesPage />} />
-      </Routes>
+      <a
+        href="#site-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        Skip to main content
+      </a>
+      <div id="site-main" className="min-h-screen">
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
+            <Route path="/" element={<Chat />} />
+            <Route path="/identity" element={<IdentityPage />} />
+            <Route path="/ens" element={<EnsPage />} />
+            <Route path="/balances" element={<BalancesPage />} />
+          </Routes>
+        </Suspense>
+      </div>
     </BrowserRouter>
   </Web3Providers>,
 );

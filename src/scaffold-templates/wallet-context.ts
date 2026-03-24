@@ -134,7 +134,10 @@ import "@rainbow-me/rainbowkit/styles.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { refetchOnWindowFocus: false },
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
   },
 });
 
@@ -205,6 +208,7 @@ export function ConnectWalletButton() {
               className={cn(
                 "inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-input",
                 "bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               )}
             >
               Connect wallet
@@ -219,6 +223,7 @@ export function ConnectWalletButton() {
             className={cn(
               "inline-flex h-9 max-w-[10rem] shrink-0 items-center truncate rounded-md border border-input",
               "bg-background px-2 font-mono text-xs hover:bg-accent hover:text-accent-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             )}
             title={account.address}
           >

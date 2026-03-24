@@ -140,6 +140,14 @@ type-safe contract addresses and ABIs in your frontend code.
 
 **Next.js apps** also get **`/debug`** (bug icon in the header): read-only view of deployed addresses and ABI, similar to [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2) Debug Contracts.
 
+### Route loading & frontend performance
+
+**Next.js:** `app/loading.tsx` plus per-route `loading.tsx` under **`/identity`**, **`/balances`**, **`/debug`**, **`/ens`** show a **header + card skeleton** as soon as you navigate, while the route’s JavaScript loads (especially noticeable in dev). **`npm run dev`** uses **`next dev --turbo`**. **`next.config.js`** sets **`experimental.optimizePackageImports: ["lucide-react"]`** so icon imports tree-shake instead of pulling the whole package. Wagmi’s React Query client uses **30s `staleTime`** to reduce background refetching.
+
+**Vite:** **`/identity`**, **`/ens`**, and **`/balances`** are loaded with **`React.lazy`** and a shared **`PageLoading`** skeleton so those chunks download only when you open those routes (home **`Chat`** stays eager).
+
+**UX / a11y (both stacks):** **Skip to main content** link (keyboard), visible **`:focus-visible`** rings on interactive controls, chat **role** landmarks and **context-aware error hints** (Gemini quota vs 1Claw vs generic env), local **faucet** uses an in-app toast instead of **`window.alert`**, **Balances** explains when no ERC-20 tokens are configured for the chain.
+
 ### 1Claw IDs programmatically
 
 With your **user** `ONECLAW_API_KEY` you can call the same REST API the CLI uses:

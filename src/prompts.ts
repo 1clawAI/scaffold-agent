@@ -15,6 +15,8 @@ import {
 } from "./actions/keys.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
 
+/** Inquirer flows for `scaffold-agent` CLI. Some exports are legacy / unused by the current wizard but kept for reuse or scripts — search for references before deleting. */
+
 function llmVendorLabel(llm: Exclude<LlmProvider, "oneclaw">): string {
   switch (llm) {
     case "gemini":

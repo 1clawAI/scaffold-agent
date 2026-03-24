@@ -84,12 +84,20 @@ function BalancesCard({
             <span className="text-muted-foreground">{data.native.symbol}</span>
             <span className="font-mono">{data.native.balance}</span>
           </li>
-          {data.tokens.map((t) => (
-            <li key={t.symbol + (t.address || "")} className="flex justify-between gap-4">
-              <span className="text-muted-foreground">{t.symbol}</span>
-              <span className="font-mono">{t.balance}</span>
+          {data.tokens.length === 0 ? (
+            <li className="text-xs text-muted-foreground pt-1">
+              No ERC-20 tokens listed for this chain in{" "}
+              <code className="rounded bg-muted px-1">network-definitions.ts</code> — native balance
+              only.
             </li>
-          ))}
+          ) : (
+            data.tokens.map((t) => (
+              <li key={t.symbol + (t.address || "")} className="flex justify-between gap-4">
+                <span className="text-muted-foreground">{t.symbol}</span>
+                <span className="font-mono">{t.balance}</span>
+              </li>
+            ))
+          )}
         </ul>
       ) : null}
     </section>
