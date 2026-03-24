@@ -695,7 +695,7 @@ async function main() {
   console.log("");
   console.log(
     chalk.gray(
-      "  Requires: just (https://just.systems/man/en/installation.html)",
+      "  Install just separately for chain/deploy/start: https://just.systems/man/en/installation.html",
     ),
   );
   console.log("");

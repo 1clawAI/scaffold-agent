@@ -2,6 +2,13 @@
 
 Interactive CLI to scaffold monorepo projects for onchain AI agents.
 
+## Prerequisites
+
+- **Node.js** and **npm** — for `npx scaffold-agent@latest` and the generated workspace.
+- **[just](https://just.systems)** — installed **separately** (not an npm dependency). Generated repos use a root **`justfile`** for `just chain`, `just deploy`, `just start`, etc. See [installation](https://just.systems/man/en/installation.html) (e.g. `brew install just`, or a prebuilt binary).
+
+Without `just`, you can still run the underlying **`npm run`** / **`npx`** scripts from the generated **`README.md`**, but the docs and defaults assume `just` is on your `PATH`.
+
 ## Basic flow
 
 Typical path when you picked **Foundry** or **Hardhat** and want a **local** node on `http://127.0.0.1:8545`:
