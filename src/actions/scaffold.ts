@@ -24,6 +24,7 @@ import {
   getWithSecretsScript,
 } from "./project-scripts.js";
 import { balancesPageSource } from "../scaffold-templates/balances-page.js";
+import { ensPageSource } from "../scaffold-templates/ens-page.js";
 import { identityPageSource } from "../scaffold-templates/identity-page.js";
 import {
   networkDefinitionsSource,
@@ -1685,7 +1686,7 @@ function chatPageContent(
       : `import { Link } from "react-router-dom";\n`;
   const cnImport = needLink ? `import { cn } from "@/lib/utils";\n` : "";
   const lucideParts = ["SendHorizontal", "Bot", "User"];
-  if (identityLink) lucideParts.push("Info", "Wallet");
+  if (identityLink) lucideParts.push("BadgeCheck", "Info", "Wallet");
   if (debugLink) lucideParts.push("Bug");
   const lucideIcons = `import { ${lucideParts.join(", ")} } from "lucide-react";`;
   const lp = (path: string) =>
@@ -1711,6 +1712,16 @@ function chatPageContent(
           <Wallet className="h-4 w-4" />
         </Link>`
     : "";
+  const headerEns = identityLink
+    ? `
+        <Link
+          ${lp("/ens")}
+          className={${iconBtnClass}}
+          title="ENS name for your agent"
+        >
+          <BadgeCheck className="h-4 w-4" />
+        </Link>`
+    : "";
   const headerIdentity = identityLink
     ? `
         <Link
@@ -1731,7 +1742,7 @@ function chatPageContent(
           <Bug className="h-4 w-4" />
         </Link>`
     : "";
-  const headerIcons = `${headerFaucet}${headerBalances}${headerIdentity}${headerBug}`;
+  const headerIcons = `${headerFaucet}${headerBalances}${headerEns}${headerIdentity}${headerBug}`;
   const headerRight = `
         <div className="flex items-center gap-2 shrink-0">
           ${headerIcons ? `<div className="flex items-center gap-1">${headerIcons}</div>` : ""}
@@ -2839,6 +2850,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     "app/identity/page.tsx",
     identityPageSource(config.projectName, "next"),
   );
+  file(pkg, "app/ens/page.tsx", ensPageSource(config.projectName, "next"));
   file(pkg, "app/balances/page.tsx", balancesPageSource("next"));
   file(pkg, "app/api/agent0/lookup/route.ts", nextApiAgent0LookupRoute());
   file(pkg, "app/api/balances/route.ts", nextApiBalancesRoute());
@@ -3515,6 +3527,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Web3Providers } from "./lib/web3-providers";
 import { Chat } from "./Chat";
 import IdentityPage from "./IdentityPage";
+import EnsPage from "./EnsPage";
 import BalancesPage from "./BalancesPage";
 import "./index.css";
 
@@ -3524,6 +3537,7 @@ createRoot(document.getElementById("root")!).render(
       <Routes>
         <Route path="/" element={<Chat />} />
         <Route path="/identity" element={<IdentityPage />} />
+        <Route path="/ens" element={<EnsPage />} />
         <Route path="/balances" element={<BalancesPage />} />
       </Routes>
     </BrowserRouter>
@@ -3547,6 +3561,7 @@ createRoot(document.getElementById("root")!).render(
     "src/IdentityPage.tsx",
     identityPageSource(config.projectName, "vite"),
   );
+  file(pkg, "src/EnsPage.tsx", ensPageSource(config.projectName, "vite"));
   file(pkg, "src/BalancesPage.tsx", balancesPageSource("vite"));
   file(
     pkg,
