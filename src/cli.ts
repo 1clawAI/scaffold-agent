@@ -5,20 +5,11 @@ import { spawn } from "node:child_process";
 import chalk from "chalk";
 import ora from "ora";
 import {
-  promptProjectName,
-  promptSecrets,
-  promptIdentity,
-  promptInstallAmpersendSdk,
-  promptLlmProvider,
-  promptThirdPartyLlmApiKey,
-  promptShroudUpstreamProvider,
-  promptShroudBillingMode,
-  promptShroudVaultProviderApiKey,
-  promptShroudProviderApiKeyForEnv,
-  promptShroudAgentCredentialsWhenNeeded,
-  promptChain,
-  promptFramework,
-} from "./prompts.js";
+  NON_INTERACTIVE_DEFAULTS,
+  parseScaffoldArgv,
+  printNonInteractiveExample,
+} from "./cli-argv.js";
+import { gatherWizardInputs } from "./cli-wizard.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
 import { generateWallet } from "./actions/keys.js";
 import { writeEnvFile } from "./actions/env.js";
@@ -67,45 +58,56 @@ ${desc}
 Usage:
   scaffold-agent [options] [project-name]
 
-Options:
-  -h, --help       Show this help message
-  -V, --version    Print the package version
+General options:
+  -h, --help                  Show this help message
+  -V, --version               Print the package version
+  -y, --non-interactive       No prompts; use flags + defaults (for CI / AI agents)
+  --project <name>            Project directory name (alternative to positional)
+
+Secrets & encryption:
+  --secrets <mode>            oneclaw | encrypted | none
+  --oneclaw-api-key <key>     1Claw user API key (when --secrets oneclaw)
+  --defer-oneclaw-api-key     Skip ONECLAW_API_KEY now (vault setup deferred)
+  --env-password <pw>         Password for .env.secrets.encrypted (required for
+                              oneclaw | encrypted in --non-interactive; min 6 chars)
+
+Agent & extras:
+  --agent <choice>            generate | none  (default with -y: generate)
+  --ampersend <choice>        yes | no        (default with -y: no)
+
+LLM:
+  --llm <provider>            oneclaw | gemini | openai | anthropic
+  --llm-api-key <key>         Third-party LLM key (when --llm is not oneclaw; optional)
+
+Shroud (only when --llm oneclaw):
+  --shroud-upstream <id>      openai | anthropic | google | gemini | mistral | cohere | openrouter
+  --shroud-billing <mode>     token_billing | provider_api_key
+  --shroud-provider-api-key   Upstream API key for provider_api_key mode (vault or .env)
+  --oneclaw-agent-id <uuid>   Required with -y when --secrets is not oneclaw and --llm oneclaw
+  --oneclaw-agent-api-key     Agent ocv_ key (same conditions)
+
+Chain & UI:
+  --chain <framework>         foundry | hardhat | none
+  --framework <ui>            nextjs | vite | python
+
+Automation:
+  --skip-npm-install          Skip npm install at the end
+  --skip-auto-fund            Skip scripts/fund-deployer.mjs after scaffold
 
 Arguments:
-  project-name     Create the project in this folder (skips the "Project name" prompt).
-                   Example: npx scaffold-agent@latest my-agent
+  project-name                Same as --project (only one positional allowed)
 
-With no arguments (except optional project-name), starts the interactive wizard.
+Interactive mode: omit --non-interactive; any option above skips that prompt when set.
+
+Non-interactive (-y): set --env-password when --secrets is oneclaw or encrypted; defaults:
+  secrets=${NON_INTERACTIVE_DEFAULTS.secrets}, agent=generate, ampersend=no, llm=${NON_INTERACTIVE_DEFAULTS.llm},
+  shroud-upstream=${NON_INTERACTIVE_DEFAULTS.shroudUpstream}, shroud-billing=${NON_INTERACTIVE_DEFAULTS.shroudBilling},
+  chain=${NON_INTERACTIVE_DEFAULTS.chain}, framework=${NON_INTERACTIVE_DEFAULTS.framework}
 
 Environment:
-  SCAFFOLD_SKIP_NPM_INSTALL=1   Skip automatic npm install at the end
-  SCAFFOLD_SKIP_AUTO_FUND=1     Skip auto-fund script after scaffold
+  SCAFFOLD_SKIP_NPM_INSTALL=1   Skip automatic npm install (same as --skip-npm-install)
+  SCAFFOLD_SKIP_AUTO_FUND=1     Skip auto-fund (same as --skip-auto-fund)
 `);
-}
-
-/**
- * Parse argv: flags, optional project name, reject unknown options.
- * Returns the first positional argument as the project directory name, if any.
- */
-function parseCli(argv: string[]): { projectNameFromCli?: string } {
-  const positionals: string[] = [];
-  for (const arg of argv) {
-    if (arg === "-h" || arg === "--help") {
-      printHelp();
-      process.exit(0);
-    }
-    if (arg === "-V" || arg === "--version") {
-      printVersion();
-      process.exit(0);
-    }
-    if (arg.startsWith("-")) {
-      console.error(`Unknown option: ${arg}\nRun scaffold-agent --help for usage.`);
-      process.exit(1);
-    }
-    positionals.push(arg);
-  }
-  const first = positionals[0]?.trim();
-  return { projectNameFromCli: first || undefined };
 }
 
 /** Written into generated `.env` when LLM = 1Claw (Shroud). */
@@ -169,30 +171,53 @@ function llmEnvKeyName(llm: LlmProvider): string | null {
 }
 
 async function main() {
-  const { projectNameFromCli } = parseCli(process.argv.slice(2));
+  let parsed;
+  try {
+    parsed = parseScaffoldArgv(process.argv.slice(2));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red(msg));
+    console.error(chalk.gray("Run scaffold-agent --help for usage."));
+    process.exit(1);
+  }
+
+  const { values, positionals } = parsed;
+  if (values.help) {
+    printHelp();
+    printNonInteractiveExample();
+    process.exit(0);
+  }
+  if (values.version) {
+    printVersion();
+    process.exit(0);
+  }
 
   showBanner();
 
-  // ── Project name ──────────────────────────────────────────────────────
-  let projectName: string;
-  if (projectNameFromCli !== undefined) {
-    const t = projectNameFromCli.trim();
-    if (!t) {
-      console.log(chalk.red('\n  Project name cannot be empty.\n'));
-      process.exit(1);
-    }
-    if (!/^[a-zA-Z0-9_-]+$/.test(t)) {
-      console.log(
-        chalk.red(
-          `\n  Invalid project name "${t}". Use letters, numbers, hyphens, or underscores only.\n`,
-        ),
-      );
-      process.exit(1);
-    }
-    projectName = t;
-  } else {
-    projectName = await promptProjectName();
+  const nonInteractive = Boolean(values["non-interactive"]);
+
+  let w;
+  try {
+    w = await gatherWizardInputs(values, positionals, nonInteractive);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red("\n" + msg + "\n"));
+    if (nonInteractive) printNonInteractiveExample();
+    process.exit(1);
   }
+
+  const { projectName, secrets, generateAgent, installAmpersendSdk, llm } = w;
+  let {
+    shroudUpstream,
+    shroudBillingMode,
+    shroudProviderKeyForVault,
+    shroudProviderKeyForEnv,
+    thirdPartyLlmApiKey,
+    shroudAgentManual,
+    chain,
+    framework,
+  } = w;
+
   const projectDir = join(process.cwd(), projectName);
 
   if (existsSync(projectDir)) {
@@ -204,49 +229,22 @@ async function main() {
     process.exit(1);
   }
 
-  // ── Secrets ───────────────────────────────────────────────────────────
-  section("Secrets Management");
-  const secrets = await promptSecrets();
-
-  // ── Identity ──────────────────────────────────────────────────────────
-  section("Agent Identity");
-  const generateAgent = await promptIdentity(secrets.mode === "oneclaw");
-
-  section("Ampersend (x402 / payments)");
-  const installAmpersendSdk = await promptInstallAmpersendSdk();
   if (installAmpersendSdk) {
+    section("Ampersend (x402 / payments)");
     info("Docs:     https://docs.ampersend.ai/");
     info("npm:      https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk");
     info("GitHub:   https://github.com/edgeandnode/ampersend-sdk");
   }
 
-  // ── LLM Provider ──────────────────────────────────────────────────────
   section("LLM Provider");
-  const llm = await promptLlmProvider(secrets.mode === "oneclaw");
-
-  let shroudUpstream: ShroudUpstreamProvider | undefined;
-  let shroudBillingMode: ShroudBillingMode | undefined;
-  let shroudProviderKeyForVault: string | undefined;
-  let shroudProviderKeyForEnv: string | undefined;
-
   if (llm === "oneclaw") {
     section("Shroud (1Claw LLM proxy)");
-    shroudUpstream = await promptShroudUpstreamProvider();
     info("Docs: https://docs.1claw.xyz/docs/guides/shroud");
-
-    shroudBillingMode = await promptShroudBillingMode();
     if (shroudBillingMode === "token_billing") {
       info(
         "You chose Token Billing — enable it under Billing on 1claw.xyz for this agent if needed",
       );
-    } else if (secrets.mode === "oneclaw") {
-      shroudProviderKeyForVault = await promptShroudVaultProviderApiKey(
-        shroudUpstream,
-      );
-    } else {
-      shroudProviderKeyForEnv = await promptShroudProviderApiKeyForEnv();
     }
-
     if (secrets.mode === "oneclaw" && !generateAgent && llm === "oneclaw") {
       info(
         "No Ethereum agent wallet — a 1Claw Shroud agent will still be registered during vault setup (for chat). Generate an agent wallet if you need AGENT_ADDRESS on-chain.",
@@ -255,14 +253,6 @@ async function main() {
   }
 
   section("LLM API Key");
-  const thirdPartyLlmApiKey = await promptThirdPartyLlmApiKey(
-    llm,
-    secrets.mode,
-  );
-  const shroudAgentManual = await promptShroudAgentCredentialsWhenNeeded(
-    llm,
-    secrets.mode,
-  );
 
   if (llm === "oneclaw" && shroudBillingMode === "token_billing") {
     info("No provider API key stored — Shroud uses 1Claw LLM Token Billing");
@@ -309,14 +299,6 @@ async function main() {
         : "Add your LLM API key to .env before using chat",
     );
   }
-
-  // ── Chain ─────────────────────────────────────────────────────────────
-  section("Chain Framework");
-  const chain = await promptChain();
-
-  // ── Framework ─────────────────────────────────────────────────────────
-  section("Framework");
-  const framework = await promptFramework();
 
   // ── Key generation ────────────────────────────────────────────────────
   section("Generating Keys");
@@ -510,8 +492,15 @@ async function main() {
   }
 
   let npmInstallOk = false;
-  if (process.env.SCAFFOLD_SKIP_NPM_INSTALL === "1") {
-    info("Skipping npm install (SCAFFOLD_SKIP_NPM_INSTALL=1)");
+  if (
+    process.env.SCAFFOLD_SKIP_NPM_INSTALL === "1" ||
+    w.skipNpmInstall
+  ) {
+    info(
+      w.skipNpmInstall
+        ? "Skipping npm install (--skip-npm-install)"
+        : "Skipping npm install (SCAFFOLD_SKIP_NPM_INSTALL=1)",
+    );
   } else {
     section("Installing dependencies");
     const npmSpinner = ora("Running npm install in project root…").start();
@@ -537,7 +526,11 @@ async function main() {
     }
   }
 
-  if (chain !== "none" && process.env.SCAFFOLD_SKIP_AUTO_FUND !== "1") {
+  if (
+    chain !== "none" &&
+    process.env.SCAFFOLD_SKIP_AUTO_FUND !== "1" &&
+    !w.skipAutoFund
+  ) {
     const fundScript = join(projectDir, "scripts", "fund-deployer.mjs");
     if (existsSync(fundScript)) {
       await new Promise<void>((resolve) => {

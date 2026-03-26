@@ -66,9 +66,11 @@ npx scaffold-agent@latest my-agent   # creates ./my-agent (skips project name pr
 
 (`@latest` is the default dist-tag — you can omit it.)
 
-**CLI flags:** `scaffold-agent --version` / `-V`, `scaffold-agent --help` / `-h`. Unknown `-…` options exit with an error. **Optional argument:** `project-name` — directory to create (same rules as the interactive prompt: letters, numbers, `-`, `_`).
+**CLI flags:** Run **`scaffold-agent --help`** / **`-h`** for the full list (every wizard step has a flag; unknown options error). **`--version`** / **`-V`**. **Optional argument:** `project-name` — directory to create (same rules as the interactive prompt: letters, numbers, `-`, `_`), or use **`--project <name>`**.
 
-After the project is written, the CLI runs **`npm install`** at the **monorepo root** (workspaces install all packages). Set **`SCAFFOLD_SKIP_NPM_INSTALL=1`** to skip (e.g. offline or you use another package manager).
+**Non-interactive / automation:** **`--non-interactive`** / **`-y`** runs with no prompts. Set **`--env-password`** when **`--secrets`** is **`oneclaw`** or **`encrypted`** (min 6 characters). Omitted choices use documented defaults in **`--help`** (e.g. Foundry + Next.js + 1Claw Shroud token billing). Use **`--skip-npm-install`** and **`--skip-auto-fund`** to match the env vars below.
+
+After the project is written, the CLI runs **`npm install`** at the **monorepo root** (workspaces install all packages). Set **`SCAFFOLD_SKIP_NPM_INSTALL=1`** or **`--skip-npm-install`** to skip (e.g. offline or you use another package manager).
 
 The wizard walks through:
 
@@ -80,7 +82,7 @@ The wizard walks through:
 6. **Chain framework** — Foundry, Hardhat, or none
 7. **App framework** — Next.js, Vite, or Python (Google A2A)
 
-At the end it displays QR codes for the Deployer and Agent addresses. If you picked a chain, the CLI also runs **`scripts/fund-deployer.mjs`** (same as **`just fund`**). **Order matters:** auto-fund only succeeds if a node is **already** listening on **`RPC_URL`** (default **`http://127.0.0.1:8545`**). Most people run **`just chain` first**, then scaffold in another terminal—or run **`just fund`** after **`cd` into the project**. Set **`SCAFFOLD_SKIP_AUTO_FUND=1`** to skip. **`just generate`** tries the same auto-fund when you create a deployer.
+At the end it displays QR codes for the Deployer and Agent addresses. If you picked a chain, the CLI also runs **`scripts/fund-deployer.mjs`** (same as **`just fund`**). **Order matters:** auto-fund only succeeds if a node is **already** listening on **`RPC_URL`** (default **`http://127.0.0.1:8545`**). Most people run **`just chain` first**, then scaffold in another terminal—or run **`just fund`** after **`cd` into the project**. Set **`SCAFFOLD_SKIP_AUTO_FUND=1`** or **`--skip-auto-fund`** to skip. **`just generate`** tries the same auto-fund when you create a deployer.
 
 ## What gets created
 

@@ -1,0 +1,333 @@
+import { select, password } from "@inquirer/prompts";
+import type { SecretsConfig } from "./types.js";
+import {
+  promptSecrets,
+  promptIdentity,
+  promptInstallAmpersendSdk,
+  promptLlmProvider,
+  promptThirdPartyLlmApiKey,
+  promptShroudUpstreamProvider,
+  promptShroudBillingMode,
+  promptShroudVaultProviderApiKey,
+  promptShroudProviderApiKeyForEnv,
+  promptShroudAgentCredentialsWhenNeeded,
+  promptChain,
+  promptFramework,
+  promptProjectName,
+} from "./prompts.js";
+import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
+import type {
+  AppFramework,
+  ChainFramework,
+  LlmProvider,
+  ShroudBillingMode,
+  ShroudUpstreamProvider,
+} from "./types.js";
+import type { CliFlagValues } from "./cli-argv.js";
+import {
+  NON_INTERACTIVE_DEFAULTS,
+  parseAgentFlag,
+  parseAmpersendFlag,
+  parseChain,
+  parseFramework,
+  parseLlm,
+  parseSecretsMode,
+  parseShroudBilling,
+  parseShroudUpstream,
+  resolveProjectName,
+} from "./cli-argv.js";
+
+export type GatheredWizard = {
+  projectName: string;
+  secrets: SecretsConfig;
+  generateAgent: boolean;
+  installAmpersendSdk: boolean;
+  llm: LlmProvider;
+  shroudUpstream: ShroudUpstreamProvider | undefined;
+  shroudBillingMode: ShroudBillingMode | undefined;
+  shroudProviderKeyForVault: string | undefined;
+  shroudProviderKeyForEnv: string | undefined;
+  thirdPartyLlmApiKey: string | undefined;
+  shroudAgentManual: { agentId?: string; agentApiKey?: string };
+  chain: ChainFramework;
+  framework: AppFramework;
+  skipNpmInstall: boolean;
+  skipAutoFund: boolean;
+};
+
+function niErr(msg: string): never {
+  throw new Error(`--non-interactive: ${msg}`);
+}
+
+async function secretsFromFlagsInteractive(v: CliFlagValues): Promise<SecretsConfig> {
+  if (v.secrets === undefined) return promptSecrets();
+
+  const mode = parseSecretsMode(v.secrets, false);
+  const config: SecretsConfig = { mode };
+
+  if (mode === "oneclaw") {
+    if (v["defer-oneclaw-api-key"]) {
+      /* defer */
+    } else if (v["oneclaw-api-key"] !== undefined) {
+      config.apiKey = v["oneclaw-api-key"];
+    } else {
+      const addKeyNow = await select<"now" | "later">({
+        message: "Add your ONECLAW_API_KEY now?",
+        choices: [
+          { value: "now" as const, name: "Enter key now" },
+          { value: "later" as const, name: "Add later" },
+        ],
+      });
+      if (addKeyNow === "now") {
+        config.apiKey = await password({
+          message: "ONECLAW_API_KEY (1ck_...):",
+          mask: "*",
+          validate: (val) => (val.trim() ? true : "API key is required"),
+        });
+      }
+    }
+  }
+
+  if (mode === "oneclaw" || mode === "encrypted") {
+    if (v["env-password"] !== undefined) {
+      if (v["env-password"].length < 6) {
+        throw new Error("CLI: --env-password must be at least 6 characters");
+      }
+      config.envPassword = v["env-password"];
+    } else {
+      config.envPassword = await password({
+        message:
+          "Set a password to encrypt secrets (API keys & private keys → .env.secrets.encrypted):",
+        mask: "*",
+        validate: (val) =>
+          val.length < 6 ? "Password must be at least 6 characters" : true,
+      });
+      const confirmPw = await password({
+        message: "Confirm password:",
+        mask: "*",
+      });
+      if (config.envPassword !== confirmPw) {
+        throw new Error("Passwords do not match. Please run again.");
+      }
+    }
+  }
+
+  return config;
+}
+
+function secretsNonInteractive(v: CliFlagValues): SecretsConfig {
+  const mode = parseSecretsMode(v.secrets, true);
+  const config: SecretsConfig = { mode };
+
+  if (mode === "oneclaw" || mode === "encrypted") {
+    const pw = v["env-password"];
+    if (pw === undefined || pw === "") {
+      niErr(
+        "set --env-password (min 6 characters) when --secrets is oneclaw or encrypted",
+      );
+    }
+    if (pw.length < 6) niErr("--env-password must be at least 6 characters");
+    config.envPassword = pw;
+  }
+
+  if (mode === "oneclaw") {
+    if (v["defer-oneclaw-api-key"] && v["oneclaw-api-key"] !== undefined) {
+      niErr("use only one of --oneclaw-api-key or --defer-oneclaw-api-key");
+    }
+    if (v["oneclaw-api-key"] !== undefined) {
+      config.apiKey = v["oneclaw-api-key"];
+    }
+  }
+
+  return config;
+}
+
+export async function gatherWizardInputs(
+  v: CliFlagValues,
+  positionals: string[],
+  nonInteractive: boolean,
+): Promise<GatheredWizard> {
+  const skipNpm = Boolean(v["skip-npm-install"]);
+  const skipAutoFund = Boolean(v["skip-auto-fund"]);
+
+  let projectName: string;
+  if (nonInteractive) {
+    projectName = resolveProjectName(positionals, v, true);
+  } else if (positionals[0]?.trim() || v.project?.trim()) {
+    projectName = resolveProjectName(positionals, v, false);
+  } else {
+    projectName = await promptProjectName();
+  }
+
+  const secrets = nonInteractive
+    ? secretsNonInteractive(v)
+    : await secretsFromFlagsInteractive(v);
+
+  let generateAgent: boolean;
+  if (nonInteractive) {
+    generateAgent = parseAgentFlag(v.agent, true);
+  } else if (v.agent !== undefined && v.agent !== "") {
+    generateAgent = parseAgentFlag(v.agent, false);
+  } else {
+    generateAgent = await promptIdentity(secrets.mode === "oneclaw");
+  }
+
+  let installAmpersendSdk: boolean;
+  if (nonInteractive) {
+    installAmpersendSdk = parseAmpersendFlag(v.ampersend, true);
+  } else if (v.ampersend !== undefined && v.ampersend !== "") {
+    installAmpersendSdk = parseAmpersendFlag(v.ampersend, false);
+  } else {
+    installAmpersendSdk = await promptInstallAmpersendSdk();
+  }
+
+  let llm: LlmProvider;
+  if (nonInteractive) {
+    llm = parseLlm(v.llm, true);
+  } else if (v.llm !== undefined && v.llm !== "") {
+    llm = parseLlm(v.llm, false);
+  } else {
+    llm = await promptLlmProvider(secrets.mode === "oneclaw");
+  }
+
+  let shroudUpstream: ShroudUpstreamProvider | undefined;
+  let shroudBillingMode: ShroudBillingMode | undefined;
+  let shroudProviderKeyForVault: string | undefined;
+  let shroudProviderKeyForEnv: string | undefined;
+
+  if (llm === "oneclaw") {
+    if (nonInteractive) {
+      shroudUpstream = parseShroudUpstream(v["shroud-upstream"], true);
+      shroudBillingMode = parseShroudBilling(v["shroud-billing"], true);
+      if (shroudBillingMode === "provider_api_key") {
+        const key = v["shroud-provider-api-key"];
+        if (key !== undefined && key !== "") {
+          if (secrets.mode === "oneclaw") shroudProviderKeyForVault = key;
+          else shroudProviderKeyForEnv = key;
+        }
+      }
+    } else {
+      shroudUpstream =
+        v["shroud-upstream"] !== undefined && v["shroud-upstream"] !== ""
+          ? parseShroudUpstream(v["shroud-upstream"], false)
+          : await promptShroudUpstreamProvider();
+
+      shroudBillingMode =
+        v["shroud-billing"] !== undefined && v["shroud-billing"] !== ""
+          ? parseShroudBilling(v["shroud-billing"], false)
+          : await promptShroudBillingMode();
+
+      if (shroudBillingMode === "token_billing") {
+        /* no key */
+      } else if (secrets.mode === "oneclaw") {
+        shroudProviderKeyForVault =
+          v["shroud-provider-api-key"] !== undefined &&
+          v["shroud-provider-api-key"] !== ""
+            ? v["shroud-provider-api-key"]
+            : await promptShroudVaultProviderApiKey(shroudUpstream);
+      } else {
+        shroudProviderKeyForEnv =
+          v["shroud-provider-api-key"] !== undefined &&
+          v["shroud-provider-api-key"] !== ""
+            ? v["shroud-provider-api-key"]
+            : await promptShroudProviderApiKeyForEnv();
+      }
+    }
+  }
+
+  let thirdPartyLlmApiKey: string | undefined;
+  if (nonInteractive) {
+    if (llm !== "oneclaw") {
+      const k = v["llm-api-key"];
+      thirdPartyLlmApiKey = k !== undefined && k !== "" ? k : undefined;
+    }
+  } else if (llm !== "oneclaw") {
+    if (v["llm-api-key"] !== undefined && v["llm-api-key"] !== "") {
+      thirdPartyLlmApiKey = v["llm-api-key"];
+    } else {
+      thirdPartyLlmApiKey = await promptThirdPartyLlmApiKey(llm, secrets.mode);
+    }
+  }
+
+  let shroudAgentManual: { agentId?: string; agentApiKey?: string };
+  if (nonInteractive) {
+    shroudAgentManual = {
+      agentId: v["oneclaw-agent-id"]?.trim() || undefined,
+      agentApiKey: v["oneclaw-agent-api-key"]?.trim() || undefined,
+    };
+  } else if (
+    llm === "oneclaw" &&
+    secrets.mode !== "oneclaw" &&
+    (v["oneclaw-agent-id"] ?? "").trim() !== "" &&
+    (v["oneclaw-agent-api-key"] ?? "").trim() !== ""
+  ) {
+    shroudAgentManual = {
+      agentId: v["oneclaw-agent-id"]!.trim(),
+      agentApiKey: v["oneclaw-agent-api-key"]!.trim(),
+    };
+  } else {
+    shroudAgentManual = await promptShroudAgentCredentialsWhenNeeded(
+      llm,
+      secrets.mode,
+    );
+  }
+
+  if (
+    nonInteractive &&
+    llm === "oneclaw" &&
+    secrets.mode !== "oneclaw" &&
+    (!shroudAgentManual.agentId || !shroudAgentManual.agentApiKey)
+  ) {
+    niErr(
+      "set --oneclaw-agent-id and --oneclaw-agent-api-key when --llm oneclaw and --secrets is not oneclaw",
+    );
+  }
+
+  if (
+    nonInteractive &&
+    llm === "oneclaw" &&
+    shroudBillingMode === "provider_api_key" &&
+    !shroudProviderKeyForVault &&
+    !shroudProviderKeyForEnv
+  ) {
+    niErr(
+      `set --shroud-provider-api-key for --shroud-billing provider_api_key (stored at ${shroudProviderVaultKeyPath(shroudUpstream!)} in vault mode or .env for plain secrets)`,
+    );
+  }
+
+  let chain: ChainFramework;
+  if (nonInteractive) {
+    chain = parseChain(v.chain, true);
+  } else if (v.chain !== undefined && v.chain !== "") {
+    chain = parseChain(v.chain, false);
+  } else {
+    chain = await promptChain();
+  }
+
+  let framework: AppFramework;
+  if (nonInteractive) {
+    framework = parseFramework(v.framework, true);
+  } else if (v.framework !== undefined && v.framework !== "") {
+    framework = parseFramework(v.framework, false);
+  } else {
+    framework = await promptFramework();
+  }
+
+  return {
+    projectName,
+    secrets,
+    generateAgent,
+    installAmpersendSdk,
+    llm,
+    shroudUpstream,
+    shroudBillingMode,
+    shroudProviderKeyForVault,
+    shroudProviderKeyForEnv,
+    thirdPartyLlmApiKey,
+    shroudAgentManual,
+    chain,
+    framework,
+    skipNpmInstall: skipNpm,
+    skipAutoFund,
+  };
+}
