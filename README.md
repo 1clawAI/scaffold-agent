@@ -2,6 +2,8 @@
 
 Interactive CLI to scaffold monorepo projects for onchain AI agents.
 
+**AI / agent tools:** see **[`AGENTS.md`](./AGENTS.md)** (shared instructions). **Claude Code** uses **[`CLAUDE.md`](./CLAUDE.md)** (imports `AGENTS.md`). **Cursor** skill: **`.cursor/skills/scaffold-agent/`**.
+
 ## Prerequisites
 
 - **Node.js** and **npm** — for `npx scaffold-agent@latest` and the generated workspace.
