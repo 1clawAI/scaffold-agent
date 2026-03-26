@@ -1,0 +1,14 @@
+---
+description: scaffold-agent CLI repo — build after src changes, AGENTS.md source of truth
+globs:
+  - "src/**/*.ts"
+alwaysApply: false
+---
+
+# scaffold-agent workspace
+
+- This package **generates** monorepos; consumer apps are **not** this folder.
+- After editing **`src/**/*.ts`**, run **`npm run build`** before validating **`dist/cli.js`**.
+- Project-wide agent instructions: **`AGENTS.md`**. Claude Code: **`CLAUDE.md`** imports it.
+- Prefer minimal diffs in **`src/actions/scaffold.ts`** (large embedded templates).
+- Do not commit secrets; **`ONECLAW_AGENT_ID`** is a UUID, not an Ethereum address.
