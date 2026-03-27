@@ -50,7 +50,10 @@ import {
 } from "../scaffold-templates/wallet-context.js";
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
-const AMPERSEND_SDK_VERSION = "^0.0.2";
+const AMPERSEND_SDK_VERSION = "0.0.14";
+
+/** 1Claw SDK version pinned for generated Next/Vite apps (vault reads in chat routes). */
+const ONECLAW_SDK_VERSION = "0.17.0";
 
 /**
  * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
@@ -2844,7 +2847,7 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   };
 
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
-    deps["@1claw/sdk"] = "latest";
+    deps["@1claw/sdk"] = ONECLAW_SDK_VERSION;
   }
   if (config.llm === "oneclaw") {
     deps["@ai-sdk/google"] = "^1.0.0";
@@ -3707,7 +3710,7 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
   };
 
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
-    deps["@1claw/sdk"] = "latest";
+    deps["@1claw/sdk"] = ONECLAW_SDK_VERSION;
   }
   if (config.llm === "oneclaw") {
     deps["@ai-sdk/google"] = "^1.0.0";
