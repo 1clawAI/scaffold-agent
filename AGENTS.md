@@ -15,7 +15,7 @@ npm run build          # tsup → dist/cli.js
 node dist/cli.js --version
 ```
 
-After changing **`src/cli.ts`**, **`src/cli-argv.ts`**, **`src/cli-wizard.ts`**, or **`src/actions/scaffold.ts`** (templates), **always run `npm run build`** before treating the CLI as up to date.
+After changing **`src/cli.ts`**, **`src/cli-argv.ts`**, **`src/cli-wizard.ts`**, **`src/agent-project-config.ts`**, or **`src/actions/scaffold.ts`** (templates), **always run `npm run build`** before treating the CLI as up to date.
 
 ## Run the CLI locally
 
@@ -44,6 +44,12 @@ node dist/cli.js -y my-app \
 
 Full flag list: **`scaffold-agent --help`**.
 
+### Config file, dump, and swarm
+
+- **`--from-config <file>`** — Merge an **`agent.json`** (or similar) into flags; **CLI arguments override** the file. Shape: **`project`** / **`name`**, **`swarm`**, **`agents`** (map of id → preset label), **`extra`** (written as **`agent.config.extra.json`** in the generated repo), plus CLI-like keys at top level or under **`options`**. Implementation: **`src/agent-project-config.ts`**.
+- **`--dump-config`** / **`--dump-config-out <file>`** — Print or write the merged **`agent.json`** shape; **secret flags are omitted** from output; unset fields use the same defaults as **`-y`**.
+- **`--swarm <n>`** (1–64) — Multiple generated agent wallets; primary stays **`AGENT_ADDRESS`**; extras in **`SWARM_AGENT_KEYS_JSON`**; public roster **`packages/*/public/agents.json`**. Generated Next/Vite apps include swarm UI (**`/swarm`**, header picker). Post-scaffold: **`just swarm agents=N`** when a UI package exists.
+
 ### Shroud + `-y` validation
 
 - **`--llm oneclaw`** with **`--secrets none`** (or non-oneclaw): set **`--oneclaw-agent-id`** and **`--oneclaw-agent-api-key`**.
@@ -58,11 +64,19 @@ Defaults under **`-y`** (see **`--help`**): e.g. Foundry, Next.js, 1Claw Shroud,
 | CLI entry | `src/cli.ts` |
 | Arg parsing, enums, defaults | `src/cli-argv.ts` |
 | Wizard / `-y` resolution | `src/cli-wizard.ts` |
+| `agent.json` merge, swarm plan, `--dump-config` JSON | `src/agent-project-config.ts` |
 | File generation + template strings | `src/actions/scaffold.ts` |
+| Encrypted `.env` split / AES-GCM helpers | `src/actions/env.ts` |
+| 1Claw vault setup (REST `fetch`, not SDK) | `src/actions/oneclaw.ts` |
+| Embedded `scripts/*.mjs` templates (fund, swarm, 1Claw, …) | `src/actions/project-scripts.ts` |
 | Inquirer prompts | `src/prompts.ts` |
 | Shared types | `src/types.ts` |
 | Reusable page/route templates | `src/scaffold-templates/*.ts` |
 | Bundled output | `dist/cli.js` (do not hand-edit) |
+
+### Pinned versions (generated Next/Vite)
+
+In **`src/actions/scaffold.ts`**: **`AMPERSEND_SDK_VERSION`** (`@ampersend_ai/ampersend-sdk`, when Ampersend is enabled) and **`ONECLAW_SDK_VERSION`** (`@1claw/sdk`, when secrets or LLM is 1Claw). Bump those constants when releasing against new SDK lines; then **`npm run build`**.
 
 ## Editing templates
 

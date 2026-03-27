@@ -43,6 +43,10 @@ node dist/cli.js --help
 - **`just reset`** — re-bootstrap 1Claw vault + agent (only when project uses 1Claw); backup `.env` / encrypted secrets first.
 - **`just swarm agents=N`** — append swarm wallets (`public/agents.json` + `SWARM_AGENT_KEYS_JSON`) when the UI package exists.
 
+## Pinned SDKs in generated apps
+
+Versions live in **`src/actions/scaffold.ts`** (`AMPERSEND_SDK_VERSION`, `ONECLAW_SDK_VERSION`). See **`AGENTS.md`** for the current pins and when to bump them.
+
 ## Links
 
 - [1claw Shroud](https://docs.1claw.xyz/docs/guides/shroud)
