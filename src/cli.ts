@@ -475,6 +475,7 @@ async function main() {
             shroudProviderKeyForVault && shroudVaultPath
               ? { path: shroudVaultPath, value: shroudProviderKeyForVault }
               : undefined,
+          postQuantumSeed: pqSeed,
         },
       );
       vaultId = result.vaultId;

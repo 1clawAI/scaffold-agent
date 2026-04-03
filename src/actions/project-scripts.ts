@@ -1299,6 +1299,12 @@ async function main() {
     agentInfo = await registerAgent(token, pkgName + "-shroud");
   }
 
+  const pqSeed = (process.env.POST_QUANTUM_SEED || "").trim();
+  if (pqSeed) {
+    await storeSecret(token, vaultId, "private-keys/post-quantum-seed", pqSeed, "private_key");
+    console.log("  Stored post-quantum seed in vault.");
+  }
+
   const llmKey = (process.env.RESET_COPY_LLM_API_KEY || "").trim();
   if (llmKey) {
     await storeSecret(token, vaultId, "llm-api-key", llmKey, "api_key");
