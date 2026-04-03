@@ -62,6 +62,8 @@ export type CliFlagValues = {
   framework?: string;
   "skip-npm-install"?: boolean;
   "skip-auto-fund"?: boolean;
+  /** Reuse an existing funded deployer wallet instead of generating a new one. */
+  "deployer-private-key"?: string;
   /** Total agent wallets when generating (1–64). */
   swarm?: string;
   /** Load defaults from agent.json (merged; CLI overrides). */
@@ -148,6 +150,7 @@ export function parseScaffoldArgv(argv: string[]): ParsedScaffoldArgv {
       framework: { type: "string" },
       "skip-npm-install": { type: "boolean" },
       "skip-auto-fund": { type: "boolean" },
+      "deployer-private-key": { type: "string" },
       swarm: { type: "string" },
       "from-config": { type: "string" },
       "dump-config": { type: "boolean" },

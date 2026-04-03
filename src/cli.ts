@@ -18,7 +18,7 @@ import {
   type AgentFileExtras,
 } from "./agent-project-config.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
-import { generatePQSeed, generateWallet } from "./actions/keys.js";
+import { generatePQSeed, generateWallet, isValidPrivateKey } from "./actions/keys.js";
 import { writeEnvFile } from "./actions/env.js";
 import { setupOneClaw } from "./actions/oneclaw.js";
 import { scaffoldProject } from "./actions/scaffold.js";
@@ -113,6 +113,7 @@ Chain & UI:
 Automation:
   --skip-npm-install          Skip npm install at the end
   --skip-auto-fund            Skip scripts/fund-deployer.mjs after scaffold
+  --deployer-private-key      Reuse an existing deployer wallet (0x + 64 hex) instead of generating one
 
 Arguments:
   project-name                Same as --project (only one positional allowed)
@@ -398,8 +399,21 @@ async function main() {
   // ── Key generation ────────────────────────────────────────────────────
   section("Generating Keys");
 
-  const deployer = generateWallet();
-  success("Generated deployer wallet");
+  const deployerKeyFlag = values["deployer-private-key"]?.trim();
+  let deployer: { address: string; privateKey: string };
+  if (deployerKeyFlag) {
+    if (!isValidPrivateKey(deployerKeyFlag)) {
+      console.log(chalk.red("\n  Invalid --deployer-private-key: must be 0x + 64 hex chars.\n"));
+      process.exit(1);
+    }
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const acct = privateKeyToAccount(deployerKeyFlag as `0x${string}`);
+    deployer = { address: acct.address, privateKey: deployerKeyFlag };
+    success("Using provided deployer wallet");
+  } else {
+    deployer = generateWallet();
+    success("Generated deployer wallet");
+  }
   keyValue("Address", deployer.address);
 
   let agent: { address: string; privateKey: string } | undefined;
