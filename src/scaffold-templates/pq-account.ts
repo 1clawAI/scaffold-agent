@@ -398,6 +398,17 @@ export const userOpToBundlerFormat = (userOp: UserOperation) => {
   };
 };
 
+/**
+ * Dummy signature for gas estimation — bundler simulation requires a correctly-sized
+ * signature even though the values are meaningless. ML-DSA-44 signatures are 2420 bytes;
+ * ECDSA secp256k1 signatures are 65 bytes. Both are zero-filled here.
+ */
+export const getDummySignature = (): string =>
+  ethers.AbiCoder.defaultAbiCoder().encode(
+    ["bytes", "bytes"],
+    [new Uint8Array(65), new Uint8Array(2420)]
+  );
+
 export const estimateUserOperationGas = async (
   userOp: UserOperation,
   bundlerUrl: string
@@ -415,9 +426,11 @@ export const estimateUserOperationGas = async (
 
     let verificationGasLimit = BigInt(result.result.verificationGasLimit);
     if (verificationGasLimit < MIN_VERIFICATION) verificationGasLimit = MIN_VERIFICATION;
-    return { verificationGasLimit, callGasLimit: BigInt(result.result.callGasLimit), preVerificationGas: BigInt(result.result.preVerificationGas || userOp.preVerificationGas) };
+    // ML-DSA signatures are ~2.5 KB; multiply preVerificationGas by 4× to cover extra calldata cost.
+    const preVerificationGas = BigInt(result.result.preVerificationGas || userOp.preVerificationGas) * 4n;
+    return { verificationGasLimit, callGasLimit: BigInt(result.result.callGasLimit), preVerificationGas };
   } catch {
-    return { verificationGasLimit: MIN_VERIFICATION, callGasLimit: 500_000n, preVerificationGas: userOp.preVerificationGas };
+    return { verificationGasLimit: MIN_VERIFICATION, callGasLimit: 500_000n, preVerificationGas: userOp.preVerificationGas * 4n };
   }
 };
 
@@ -480,6 +493,7 @@ import {
   createBaseUserOperation,
   ENTRY_POINT_ADDRESS,
   estimateUserOperationGas,
+  getDummySignature,
   signUserOpHybrid,
   submitUserOperation,
   updateUserOpWithGasEstimates,
@@ -522,14 +536,16 @@ export const sendERC4337Transaction = async (
 
     let userOp = await createBaseUserOperation(accountAddress, targetAddress, value, callData, provider, bundlerUrl);
 
-    userOp.signature = await signUserOpHybrid(userOp, ENTRY_POINT_ADDRESS, network.chainId, preQuantumSeed, secretKey);
-
     if (!bundlerUrl || bundlerUrl.trim() === "") {
+      userOp.signature = await signUserOpHybrid(userOp, ENTRY_POINT_ADDRESS, network.chainId, preQuantumSeed, secretKey);
       return { success: true, userOp, message: "UserOperation created and signed (no bundler URL — cannot submit)" };
     }
 
+    // Use a dummy signature for gas estimation — bundler simulates the tx and needs a full-size sig.
+    userOp.signature = getDummySignature();
     const gasEstimates = await estimateUserOperationGas(userOp, bundlerUrl);
     userOp = updateUserOpWithGasEstimates(userOp, gasEstimates);
+    // Re-sign with the correct gas limits before submission.
     userOp.signature = await signUserOpHybrid(userOp, ENTRY_POINT_ADDRESS, network.chainId, preQuantumSeed, secretKey);
 
     try {

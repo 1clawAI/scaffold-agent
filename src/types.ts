@@ -36,7 +36,7 @@ export interface SwarmAgentDef {
   preset?: string;
 }
 
-export type PQScheme = "mldsa" | "falcon" | "mldsaeth" | "ethfalcon";
+export type PQScheme = "mldsa";
 
 export interface PQAccountConfig {
   scheme: PQScheme;

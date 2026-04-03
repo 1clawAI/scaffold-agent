@@ -9,8 +9,8 @@
 
 export type PQNetworkKey = "sepolia" | "arbitrumSepolia" | "baseSepolia";
 
-/** The post-quantum scheme. Only k1 (secp256k1) pre-quantum supported — agent wallet is always k1. */
-export type PQSchemeKey = "mldsa" | "falcon" | "mldsaeth" | "ethfalcon";
+/** Only ML-DSA-44 is supported. Falcon uses a custom WASM compact encoding incompatible with @noble/post-quantum. */
+export type PQSchemeKey = "mldsa";
 
 export interface PQFactoryEntry {
   address: string;
@@ -39,24 +39,6 @@ export const PQ_DEPLOYMENTS: Record<PQNetworkKey, PQNetworkDeployment> = {
         preQuantum: "ecdsa_k1",
         saltLabel: "ZKNOX_MLDSA_K1_FACTORY_V0_0_10",
       },
-      mldsaeth: {
-        address: "0xBDb9856FB6A96ABB589Be8AD9aDFD604A169e77E",
-        postQuantum: "mldsaeth",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_MLDSAETH_K1_FACTORY_V0_0_2",
-      },
-      falcon: {
-        address: "0x1ba6cBC26dB58c7E17DEb07E6124D28957aa6268",
-        postQuantum: "falcon",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_FALCON_K1_FACTORY_V0_0_4",
-      },
-      ethfalcon: {
-        address: "0x88E72b8DF88Fc42be6974e1909A2d71DAb5ad194",
-        postQuantum: "ethfalcon",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_ETHFALCON_K1_FACTORY_V0_0_2",
-      },
     },
   },
   arbitrumSepolia: {
@@ -69,24 +51,6 @@ export const PQ_DEPLOYMENTS: Record<PQNetworkKey, PQNetworkDeployment> = {
         postQuantum: "mldsa",
         preQuantum: "ecdsa_k1",
         saltLabel: "ZKNOX_MLDSA_K1_FACTORY_V0_0_10",
-      },
-      mldsaeth: {
-        address: "0x6eA83FEaE9e7B4a9B6A68839E8612c593E42D0E0",
-        postQuantum: "mldsaeth",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_MLDSAETH_K1_FACTORY_V0_0_2",
-      },
-      falcon: {
-        address: "0x1ba6cBC26dB58c7E17DEb07E6124D28957aa6268",
-        postQuantum: "falcon",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_FALCON_K1_FACTORY_V0_0_4",
-      },
-      ethfalcon: {
-        address: "0x9A97ffb1E8F7a37d705fDDCB82da51351b2f45aD",
-        postQuantum: "ethfalcon",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_ETHFALCON_K1_FACTORY_V0_0_2",
       },
     },
   },
@@ -101,12 +65,6 @@ export const PQ_DEPLOYMENTS: Record<PQNetworkKey, PQNetworkDeployment> = {
         preQuantum: "ecdsa_k1",
         saltLabel: "ZKNOX_MLDSA_K1_FACTORY_V0_0_10",
       },
-      falcon: {
-        address: "0x1ba6cBC26dB58c7E17DEb07E6124D28957aa6268",
-        postQuantum: "falcon",
-        preQuantum: "ecdsa_k1",
-        saltLabel: "ZKNOX_FALCON_K1_FACTORY_V0_0_4",
-      },
     },
   },
 };
@@ -118,10 +76,7 @@ export const NETWORK_LABELS: Record<PQNetworkKey, string> = {
 };
 
 export const SCHEME_LABELS: Record<PQSchemeKey, string> = {
-  mldsa: "ML-DSA-44 (NIST FIPS 204) [Recommended]",
-  mldsaeth: "ML-DSA-44 ETH variant (Ethereum-prefixed hash)",
-  falcon: "FALCON-512",
-  ethfalcon: "FALCON-512 ETH variant (Ethereum-prefixed hash)",
+  mldsa: "ML-DSA-44 (NIST FIPS 204)",
 };
 
 /** All deployed networks. */
