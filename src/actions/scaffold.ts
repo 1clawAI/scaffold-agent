@@ -37,6 +37,7 @@ import {
   pqSendTransactionSource,
   pqConfigSource,
   deployPQAccountScriptSource,
+  sendPQTransactionScriptSource,
 } from "../scaffold-templates/pq-account.js";
 import { balancesPageSource } from "../scaffold-templates/balances-page.js";
 import { ensPageSource } from "../scaffold-templates/ens-page.js";
@@ -246,8 +247,8 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     }
   }
   if (config.pqAccount) {
-    rootDevDeps["@noble/post-quantum"] = "^0.5.4";
-    rootDevDeps["@noble/hashes"] = "^2.0.1";
+    rootDevDeps["@noble/post-quantum"] = "^0.2.0";
+    rootDevDeps["@noble/hashes"] = "^1.4.0";
     rootDevDeps["ethers"] = "^6.16.0";
     rootDevDeps["dotenv"] = "^16.4.0";
   }
@@ -609,6 +610,11 @@ function writeJustfile(root: string, config: ScaffoldConfig) {
       "deploy-pq:",
       "    node scripts/with-secrets.mjs -- node scripts/deploy-pq-account.mjs",
       "",
+      "# Send ETH from the PQ smart account via ERC-4337 bundler",
+      "# Usage: just send-pq to=0xRecipient amount=0.0001",
+      "send-pq to amount calldata='0x':",
+      "    node scripts/with-secrets.mjs -- node scripts/send-pq-transaction.mjs {{to}} {{amount}} {{calldata}}",
+      "",
     );
   }
 
@@ -650,6 +656,7 @@ function writeScripts(root: string, config: ScaffoldConfig) {
 
   if (config.pqAccount) {
     file(scripts, "deploy-pq-account.mjs", deployPQAccountScriptSource());
+    file(scripts, "send-pq-transaction.mjs", sendPQTransactionScriptSource());
   }
 
   // ── generate-abi-types.mjs ──────────────────────────────────────────────
@@ -2884,8 +2891,8 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
   }
   if (config.pqAccount) {
-    deps["@noble/post-quantum"] = "^0.5.4";
-    deps["@noble/hashes"] = "^2.0.1";
+    deps["@noble/post-quantum"] = "^0.2.0";
+    deps["@noble/hashes"] = "^1.4.0";
     deps["ethers"] = "^6.16.0";
   }
 
@@ -3762,8 +3769,8 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
   }
   if (config.pqAccount) {
-    deps["@noble/post-quantum"] = "^0.5.4";
-    deps["@noble/hashes"] = "^2.0.1";
+    deps["@noble/post-quantum"] = "^0.2.0";
+    deps["@noble/hashes"] = "^1.4.0";
     deps["ethers"] = "^6.16.0";
   }
 

@@ -38,7 +38,26 @@ export function pqHexSource(): string {
  * on-chain ZKNOX verifier expects. Heavy math done once at account-creation time.
  */
 export function pqUtilsMldsaSource(): string {
-  return `import { shake128, shake256 } from "@noble/hashes/sha3.js";
+  return `import { ethers } from "ethers";
+import { shake128, shake256 } from "@noble/hashes/sha3";
+// @ts-ignore — internal noble module, no public types
+import { genCrystals } from "@noble/post-quantum/_crystals";
+
+const N = 256;
+const Q = 8380417;
+const D = 13;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const { NTT } = (genCrystals as any)({
+  N, Q, F: 8347681, ROOT_OF_UNITY: 1753,
+  newPoly: (n: number) => new Int32Array(n),
+  isKyber: false, brvBits: 8,
+});
+
+const polyShiftl = (p: Int32Array): Int32Array => {
+  for (let i = 0; i < N; i++) p[i] <<= D;
+  return p;
+};
 
 const RejectionSamplePoly = (
   rho: Uint8Array,
@@ -147,6 +166,7 @@ export const compact_module_256 = (data: Int32Array[][], m: number): bigint[][][
  */
 export const to_expanded_encoded_bytes = (publicKey: Uint8Array): string => {
   const { rho, t1, tr } = decodePublicKey(publicKey);
+  t1.forEach((poly) => NTT.encode(polyShiftl(poly)));
   const A_hat = recoverAhat(rho, 4, 4);
   const A_hat_compact = compact_module_256(A_hat, 32);
   const A_hat_stringified = A_hat_compact.map((row) =>
@@ -155,8 +175,7 @@ export const to_expanded_encoded_bytes = (publicKey: Uint8Array): string => {
   const [t1_compact] = compact_module_256([t1], 32);
   const t1_stringified = t1_compact.map((row) => row.map((val) => val.toString()));
 
-  const { AbiCoder } = await import("ethers");
-  const abiCoder = AbiCoder.defaultAbiCoder();
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
   const aHatEncoded = abiCoder.encode(["uint256[][][]"], [A_hat_stringified]);
   const t1Encoded = abiCoder.encode(["uint256[][]"], [t1_stringified]);
   return abiCoder.encode(["bytes", "bytes", "bytes"], [aHatEncoded, tr, t1Encoded]);
@@ -169,7 +188,7 @@ export const to_expanded_encoded_bytes = (publicKey: Uint8Array): string => {
  * Accepts pre-quantum seed (= ECDSA private key) + post-quantum seed (= ML-DSA seed).
  */
 export function pqCreateAccountSource(): string {
-  return `import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
+  return `import { ml_dsa44 } from "@noble/post-quantum/ml-dsa";
 import { ethers, Signer } from "ethers";
 import { hexToU8 } from "./hex.js";
 import { to_expanded_encoded_bytes } from "./utils-mldsa.js";
@@ -299,7 +318,7 @@ export const deployERC4337Account = async (
  * The EntryPoint address is the canonical ERC-4337 v0.7 address.
  */
 export function pqUserOperationSource(): string {
-  return `import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
+  return `import { ml_dsa44 } from "@noble/post-quantum/ml-dsa";
 import { BrowserProvider, ethers } from "ethers";
 
 export const ENTRY_POINT_ADDRESS = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
@@ -467,7 +486,7 @@ export const signUserOpHybrid = async (
 ): Promise<string> => {
   const hash = getUserOpHash(userOp, entryPointAddress, chainId);
   const preQuantumSig = new ethers.Wallet(preQuantumPrivateKey).signingKey.sign(hash).serialized;
-  const postQuantumSig = ethers.hexlify(ml_dsa44.sign(ethers.getBytes(hash), postQuantumSecretKey));
+  const postQuantumSig = ethers.hexlify(ml_dsa44.sign(postQuantumSecretKey, ethers.getBytes(hash)));
   return ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "bytes"], [preQuantumSig, postQuantumSig]);
 };
 
@@ -486,7 +505,7 @@ export const submitUserOperation = async (userOp: UserOperation, bundlerUrl: str
 
 /** High-level ERC-4337 transaction sender with hybrid PQ signing. */
 export function pqSendTransactionSource(): string {
-  return `import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
+  return `import { ml_dsa44 } from "@noble/post-quantum/ml-dsa";
 import { BrowserProvider, ethers, isAddress } from "ethers";
 import { hexToU8 } from "./hex.js";
 import {
@@ -588,8 +607,9 @@ export function deployPQAccountScriptSource(): string {
  */
 import "dotenv/config";
 import { ethers } from "ethers";
-import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
-import { shake128, shake256 } from "@noble/hashes/sha3.js";
+import { ml_dsa44 } from "@noble/post-quantum/ml-dsa";
+import { shake128, shake256 } from "@noble/hashes/sha3";
+import { genCrystals } from "@noble/post-quantum/_crystals";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -598,6 +618,14 @@ import { createInterface } from "node:readline/promises";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const ENV_PATH = join(ROOT, ".env");
+
+// ── NTT setup (for ML-DSA-44 public key expansion) ───────────────────────────
+const _N = 256, _Q = 8380417, _D = 13;
+const { NTT } = genCrystals({
+  N: _N, Q: _Q, F: 8347681, ROOT_OF_UNITY: 1753,
+  newPoly: (n) => new Int32Array(n),
+  isKyber: false, brvBits: 8,
+});
 
 // ── Load env ─────────────────────────────────────────────────────────────────
 const deployerPrivKey = process.env.DEPLOYER_PRIVATE_KEY;
@@ -645,6 +673,7 @@ function expandPQPublicKey(publicKey) {
     t1.push(poly);
   }
   const tr = shake256(new Uint8Array(publicKey), { dkLen: 64 });
+  t1.forEach(poly => { for (let i = 0; i < _N; i++) poly[i] <<= _D; NTT.encode(poly); });
 
   const A_hat = [];
   for (let i = 0; i < K; i++) {
@@ -781,6 +810,235 @@ function writeEnvVar(key, value) {
   }
   writeFileSync(ENV_PATH, content);
 }
+`;
+}
+
+/**
+ * Node.js send-transaction script (scripts/send-pq-transaction.mjs).
+ * Sends ETH from a deployed PQ smart account via ERC-4337 bundler.
+ *
+ * Usage:
+ *   node scripts/send-pq-transaction.mjs <to> <amountEth> [calldata]
+ *   node scripts/send-pq-transaction.mjs 0xRecipient 0.0001
+ */
+export function sendPQTransactionScriptSource(): string {
+  return `#!/usr/bin/env node
+/**
+ * Send a transaction from a ZKNOX PQ ERC-4337 smart account.
+ *
+ * Prerequisites:
+ *   - Account already deployed (run scripts/deploy-pq-account.mjs first)
+ *   - .env must contain: AGENT_PRIVATE_KEY, POST_QUANTUM_SEED, PQ_ACCOUNT_ADDRESS,
+ *     BUNDLER_URL, PQ_NETWORK, PQ_CHAIN_ID, RPC_URL (optional, defaults per network)
+ *
+ * Usage:
+ *   node scripts/send-pq-transaction.mjs <to> <amountEth> [calldata]
+ *   node scripts/with-secrets.mjs -- node scripts/send-pq-transaction.mjs 0xAbc... 0.0001
+ */
+import "dotenv/config";
+import { ethers } from "ethers";
+import { ml_dsa44 } from "@noble/post-quantum/ml-dsa";
+import { shake128, shake256 } from "@noble/hashes/sha3";
+import { genCrystals } from "@noble/post-quantum/_crystals";
+
+// ── NTT setup ────────────────────────────────────────────────────────────────
+const _N = 256, _Q = 8380417, _D = 13;
+const { NTT } = genCrystals({
+  N: _N, Q: _Q, F: 8347681, ROOT_OF_UNITY: 1753,
+  newPoly: (n) => new Int32Array(n),
+  isKyber: false, brvBits: 8,
+});
+
+// ── Args ──────────────────────────────────────────────────────────────────────
+const [,, toArg, amountArg, calldataArg] = process.argv;
+if (!toArg || !amountArg) {
+  console.error("Usage: node scripts/send-pq-transaction.mjs <to> <amountEth> [calldata]");
+  console.error("  e.g. node scripts/send-pq-transaction.mjs 0xRecipient 0.0001");
+  process.exit(1);
+}
+if (!ethers.isAddress(toArg)) { console.error("Invalid <to> address: " + toArg); process.exit(1); }
+
+// ── Load env ──────────────────────────────────────────────────────────────────
+const agentPrivKey    = process.env.AGENT_PRIVATE_KEY;
+const postQuantumSeed = process.env.POST_QUANTUM_SEED;
+const accountAddress  = process.env.PQ_ACCOUNT_ADDRESS;
+const bundlerUrl      = process.env.BUNDLER_URL ?? "";
+const pqNetwork       = process.env.PQ_NETWORK ?? "sepolia";
+const chainId         = Number(process.env.PQ_CHAIN_ID ?? "11155111");
+const rpcUrl          = process.env.RPC_URL ?? getRpcDefault(pqNetwork);
+
+function getRpcDefault(network) {
+  const m = { sepolia: "https://rpc.sepolia.org", arbitrumSepolia: "https://sepolia-rollup.arbitrum.io/rpc", baseSepolia: "https://sepolia.base.org" };
+  return m[network] ?? "https://rpc.sepolia.org";
+}
+
+if (!agentPrivKey)    { console.error("Missing AGENT_PRIVATE_KEY in .env");    process.exit(1); }
+if (!postQuantumSeed) { console.error("Missing POST_QUANTUM_SEED in .env");    process.exit(1); }
+if (!accountAddress)  { console.error("Missing PQ_ACCOUNT_ADDRESS in .env — deploy the account first"); process.exit(1); }
+if (!bundlerUrl)      { console.error("Missing BUNDLER_URL in .env");           process.exit(1); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function hexToU8(hex, expectedBytes = 32) {
+  if (hex.startsWith("0x")) hex = hex.slice(2);
+  if (hex.length !== expectedBytes * 2) throw new Error("Invalid hex length for " + hex.slice(0, 10) + "...");
+  return Uint8Array.from(hex.match(/.{2}/g).map(b => parseInt(b, 16)));
+}
+
+function packUint128(a, b) {
+  return ethers.solidityPacked(["uint128", "uint128"], [a, b]);
+}
+
+function unpackUint128(packed) {
+  const bytes = ethers.getBytes(packed);
+  const first  = BigInt("0x" + ethers.hexlify(bytes.slice(0, 16)).slice(2));
+  const second = BigInt("0x" + ethers.hexlify(bytes.slice(16, 32)).slice(2));
+  return [first, second];
+}
+
+const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+
+const ACCOUNT_ABI = [
+  "function execute(address dest, uint256 value, bytes calldata func) external",
+  "function getNonce() external view returns (uint256)",
+];
+
+function getUserOpHash(userOp, entryPoint, cid) {
+  const abi = ethers.AbiCoder.defaultAbiCoder();
+  const packed = abi.encode(
+    ["address","uint256","bytes32","bytes32","bytes32","uint256","bytes32","bytes32"],
+    [userOp.sender, userOp.nonce, ethers.keccak256(userOp.initCode), ethers.keccak256(userOp.callData),
+     userOp.accountGasLimits, userOp.preVerificationGas, userOp.gasFees, ethers.keccak256(userOp.paymasterAndData)]
+  );
+  return ethers.keccak256(abi.encode(["bytes32","address","uint256"], [ethers.keccak256(packed), entryPoint, cid]));
+}
+
+function userOpToBundlerFormat(userOp) {
+  const [verificationGasLimit, callGasLimit] = unpackUint128(userOp.accountGasLimits);
+  const [maxPriorityFeePerGas, maxFeePerGas] = unpackUint128(userOp.gasFees);
+  return {
+    sender: userOp.sender,
+    nonce:  "0x" + BigInt(userOp.nonce).toString(16),
+    callData: userOp.callData,
+    verificationGasLimit: "0x" + verificationGasLimit.toString(16),
+    callGasLimit:         "0x" + callGasLimit.toString(16),
+    preVerificationGas:   "0x" + BigInt(userOp.preVerificationGas).toString(16),
+    maxFeePerGas:         "0x" + maxFeePerGas.toString(16),
+    maxPriorityFeePerGas: "0x" + maxPriorityFeePerGas.toString(16),
+    signature: userOp.signature,
+  };
+}
+
+async function bundlerRpc(url, method, params) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(method + " error: " + (json.error.message ?? JSON.stringify(json.error)));
+  return json.result;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+const provider = new ethers.JsonRpcProvider(rpcUrl, { chainId, name: pqNetwork });
+const network  = await provider.getNetwork();
+const value    = ethers.parseEther(amountArg);
+const calldata = calldataArg ?? "0x";
+
+console.log("\\nNetwork:  " + pqNetwork + " (chainId " + chainId + ")");
+console.log("Account:  " + accountAddress);
+console.log("To:       " + toArg);
+console.log("Value:    " + amountArg + " ETH");
+console.log("Bundler:  " + bundlerUrl);
+
+const accountBalance = await provider.getBalance(accountAddress);
+console.log("Balance:  " + ethers.formatEther(accountBalance) + " ETH");
+
+if (accountBalance < value) {
+  console.error("\\nInsufficient balance. Fund " + accountAddress + " first.");
+  process.exit(1);
+}
+
+// ── Build UserOp ──────────────────────────────────────────────────────────────
+const account = new ethers.Contract(accountAddress, ACCOUNT_ABI, provider);
+let nonce;
+try { nonce = await account.getNonce(); } catch { nonce = 0n; }
+
+const executeCallData = account.interface.encodeFunctionData("execute", [toArg, value, calldata]);
+
+let maxPriority, maxFee;
+try {
+  const gp = await bundlerRpc(bundlerUrl, "pimlico_getUserOperationGasPrice", []);
+  maxFee      = BigInt(gp.standard.maxFeePerGas);
+  maxPriority = BigInt(gp.standard.maxPriorityFeePerGas);
+} catch {
+  maxPriority = ethers.parseUnits("0.1", "gwei");
+  maxFee      = ethers.parseUnits("0.2", "gwei");
+}
+
+let userOp = {
+  sender: accountAddress,
+  nonce,
+  initCode: "0x",
+  callData: executeCallData,
+  accountGasLimits: packUint128(13_500_000n, 500_000n),
+  preVerificationGas: 1_000_000n,
+  gasFees: packUint128(maxPriority, maxFee),
+  paymasterAndData: "0x",
+  signature: "0x",
+};
+
+// ── Dummy sig for gas estimation ──────────────────────────────────────────────
+const dummySig = ethers.AbiCoder.defaultAbiCoder().encode(
+  ["bytes", "bytes"], [new Uint8Array(65).fill(0xff), new Uint8Array(2420).fill(0xff)]
+);
+userOp.signature = dummySig;
+
+console.log("\\nEstimating gas...");
+const est = await bundlerRpc(bundlerUrl, "eth_estimateUserOperationGas", [userOpToBundlerFormat(userOp), ENTRY_POINT]);
+const MIN_VERIFICATION = 13_500_000n;
+let verificationGasLimit = BigInt(est.verificationGasLimit);
+if (verificationGasLimit < MIN_VERIFICATION) verificationGasLimit = MIN_VERIFICATION;
+const callGasLimit       = BigInt(est.callGasLimit);
+const preVerificationGas = BigInt(est.preVerificationGas || userOp.preVerificationGas) * 4n;
+
+userOp.accountGasLimits  = packUint128(verificationGasLimit, callGasLimit);
+userOp.preVerificationGas = preVerificationGas;
+console.log("- verificationGasLimit: " + verificationGasLimit);
+console.log("- callGasLimit:         " + callGasLimit);
+console.log("- preVerificationGas:   " + preVerificationGas);
+
+// ── Sign ──────────────────────────────────────────────────────────────────────
+const hash = getUserOpHash(userOp, ENTRY_POINT, network.chainId);
+const hashBytes = ethers.getBytes(hash);
+
+const ecdsaSig = new ethers.Wallet(agentPrivKey).signingKey.sign(hash).serialized;
+const { secretKey } = ml_dsa44.keygen(hexToU8(postQuantumSeed, 32));
+const mldsaSig = ethers.hexlify(ml_dsa44.sign(secretKey, hashBytes));
+
+userOp.signature = ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "bytes"], [ecdsaSig, mldsaSig]);
+console.log("\\nHybrid signature generated (ECDSA + ML-DSA-44)");
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+console.log("Submitting UserOp to bundler...");
+const userOpHash = await bundlerRpc(bundlerUrl, "eth_sendUserOperation", [userOpToBundlerFormat(userOp), ENTRY_POINT]);
+console.log("\\nSubmitted! userOpHash: " + userOpHash);
+console.log("Waiting for receipt...");
+
+const deadline = Date.now() + 120_000;
+while (Date.now() < deadline) {
+  try {
+    const receipt = await bundlerRpc(bundlerUrl, "eth_getUserOperationReceipt", [userOpHash]);
+    if (receipt) {
+      console.log("\\nMined!");
+      if (receipt.receipt?.transactionHash) console.log("Tx: " + receipt.receipt.transactionHash);
+      if (receipt.success === false)        console.log("WARNING: UserOp execution reverted on-chain");
+      process.exit(0);
+    }
+  } catch { /* keep polling */ }
+  await new Promise(r => setTimeout(r, 3000));
+}
+console.log("Timed out waiting for receipt. The UserOp may still be pending.");
 `;
 }
 
