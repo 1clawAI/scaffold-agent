@@ -598,10 +598,18 @@ export function deployPQAccountScriptSource(): string {
 /**
  * Deploy ZKNOX PQ ERC-4337 smart account.
  *
+ * Supports both base accounts and agent accounts (with spending limits).
+ * Set PQ_ACCOUNT_TYPE=agent in .env to deploy an agent account.
+ *
  * Prerequisites:
  *   - Fund DEPLOYER_ADDRESS on the target network (PQ_NETWORK / PQ_CHAIN_ID)
  *   - .env must contain: DEPLOYER_PRIVATE_KEY, AGENT_PRIVATE_KEY, POST_QUANTUM_SEED,
  *     PQ_FACTORY_ADDRESS, PQ_NETWORK, PQ_CHAIN_ID, RPC_URL (or uses default RPC)
+ *
+ * Agent account extra vars (PQ_ACCOUNT_TYPE=agent):
+ *   MAX_ETH_PER_TX   — max ETH per tx in wei (0 = unlimited, default 0)
+ *   MAX_USDC_PER_TX  — max USDC per tx in 6-decimal units (0 = unlimited, default 0)
+ *   USDC_ADDRESS     — USDC token contract address (default address(0))
  *
  * Run: node scripts/deploy-pq-account.mjs
  */
@@ -628,20 +636,27 @@ const { NTT } = genCrystals({
 });
 
 // ── Load env ─────────────────────────────────────────────────────────────────
-const deployerPrivKey = process.env.DEPLOYER_PRIVATE_KEY;
-const agentPrivKey    = process.env.AGENT_PRIVATE_KEY;
-const postQuantumSeed = process.env.POST_QUANTUM_SEED;
-const factoryAddress  = process.env.PQ_FACTORY_ADDRESS;
-const bundlerUrl      = process.env.BUNDLER_URL ?? "";
-const pqNetwork       = process.env.PQ_NETWORK ?? "sepolia";
-const chainId         = Number(process.env.PQ_CHAIN_ID ?? "11155111");
-const rpcUrl          = process.env.RPC_URL ?? getRpcDefault(pqNetwork);
+const deployerPrivKey  = process.env.DEPLOYER_PRIVATE_KEY;
+const agentPrivKey     = process.env.AGENT_PRIVATE_KEY;
+const postQuantumSeed  = process.env.POST_QUANTUM_SEED;
+const factoryAddress   = process.env.PQ_FACTORY_ADDRESS;
+const bundlerUrl       = process.env.BUNDLER_URL ?? "";
+const pqNetwork        = process.env.PQ_NETWORK ?? "sepolia";
+const chainId          = Number(process.env.PQ_CHAIN_ID ?? "11155111");
+const rpcUrl           = process.env.RPC_URL ?? getRpcDefault(pqNetwork);
+const accountType      = (process.env.PQ_ACCOUNT_TYPE ?? "base").toLowerCase();
+const isAgent          = accountType === "agent";
+const maxEthPerTx      = BigInt(process.env.MAX_ETH_PER_TX  ?? "0");
+const maxUsdcPerTx     = BigInt(process.env.MAX_USDC_PER_TX ?? "0");
+const usdcAddress      = process.env.USDC_ADDRESS ?? "0x0000000000000000000000000000000000000000";
 
 function getRpcDefault(network) {
   const defaults = {
     sepolia:         "https://rpc.sepolia.org",
     arbitrumSepolia: "https://sepolia-rollup.arbitrum.io/rpc",
     baseSepolia:     "https://sepolia.base.org",
+    base:            "https://mainnet.base.org",
+    arcTestnet:      "https://rpc.testnet.arc.network",
   };
   return defaults[network] ?? "https://rpc.sepolia.org";
 }
@@ -734,10 +749,12 @@ if (balance === 0n) {
   process.exit(1);
 }
 
-// ── Compute counterfactual address ────────────────────────────────────────────
+// ── Factory ABI (covers both base and agent accounts) ─────────────────────────
 const FACTORY_ABI = [
   "function createAccount(bytes calldata preQuantumPubKey, bytes calldata postQuantumPubKey) external returns (address)",
   "function getAddress(bytes calldata preQuantumPubKey, bytes calldata postQuantumPubKey) external view returns (address payable)",
+  "function createAgentAccount(bytes calldata preQuantumPubKey, bytes calldata postQuantumPubKey, uint256 maxETHPerTransaction, uint256 maxUSDCPerTransaction, address usdc) external returns (address)",
+  "function getAgentAddress(bytes calldata preQuantumPubKey, bytes calldata postQuantumPubKey, uint256 maxETHPerTransaction, uint256 maxUSDCPerTransaction, address usdc) external view returns (address payable)",
 ];
 
 const factoryCode = await provider.getCode(factoryAddress);
@@ -746,11 +763,27 @@ if (factoryCode === "0x") {
   process.exit(1);
 }
 
+console.log("\\nAccount type: " + (isAgent ? "agent" : "base"));
+if (isAgent) {
+  console.log("  Max ETH/tx  : " + (maxEthPerTx === 0n ? "unlimited" : ethers.formatEther(maxEthPerTx) + " ETH"));
+  console.log("  Max USDC/tx : " + (maxUsdcPerTx === 0n ? "unlimited" : (Number(maxUsdcPerTx) / 1e6).toFixed(6) + " USDC"));
+  console.log("  USDC addr   : " + usdcAddress);
+}
+
 const factory = new ethers.Contract(factoryAddress, FACTORY_ABI, deployer);
 const iface   = new ethers.Interface(FACTORY_ABI);
-const callData = iface.encodeFunctionData("getAddress", [preQuantumPubKey, postQuantumPubKey]);
-const result   = await provider.call({ to: factoryAddress, data: callData });
-const [smartAccountAddress] = iface.decodeFunctionResult("getAddress", result);
+
+// Predict counterfactual address
+let smartAccountAddress;
+if (isAgent) {
+  const callData = iface.encodeFunctionData("getAgentAddress", [preQuantumPubKey, postQuantumPubKey, maxEthPerTx, maxUsdcPerTx, usdcAddress]);
+  const result   = await provider.call({ to: factoryAddress, data: callData });
+  [smartAccountAddress] = iface.decodeFunctionResult("getAgentAddress", result);
+} else {
+  const callData = iface.encodeFunctionData("getAddress", [preQuantumPubKey, postQuantumPubKey]);
+  const result   = await provider.call({ to: factoryAddress, data: callData });
+  [smartAccountAddress] = iface.decodeFunctionResult("getAddress", result);
+}
 
 console.log("\\nSmart account address: " + smartAccountAddress);
 
@@ -773,7 +806,9 @@ if (answer.trim().toLowerCase() !== "y") {
 // ── Deploy ────────────────────────────────────────────────────────────────────
 let gas;
 try {
-  gas = await factory.createAccount.estimateGas(preQuantumPubKey, postQuantumPubKey);
+  gas = isAgent
+    ? await factory.createAgentAccount.estimateGas(preQuantumPubKey, postQuantumPubKey, maxEthPerTx, maxUsdcPerTx, usdcAddress)
+    : await factory.createAccount.estimateGas(preQuantumPubKey, postQuantumPubKey);
 } catch {
   gas = 5_000_000n;
 }
@@ -781,9 +816,9 @@ const feeData = await provider.getFeeData();
 const gasPrice = feeData.gasPrice ?? 0n;
 console.log("Estimated gas: " + gas + " @ " + ethers.formatUnits(gasPrice, "gwei") + " gwei");
 
-const tx = await factory.createAccount(preQuantumPubKey, postQuantumPubKey, {
-  gasLimit: (gas * 120n) / 100n,
-});
+const tx = isAgent
+  ? await factory.createAgentAccount(preQuantumPubKey, postQuantumPubKey, maxEthPerTx, maxUsdcPerTx, usdcAddress, { gasLimit: (gas * 120n) / 100n })
+  : await factory.createAccount(preQuantumPubKey, postQuantumPubKey, { gasLimit: (gas * 120n) / 100n });
 console.log("Tx: " + tx.hash);
 console.log("Waiting for confirmation...");
 const receipt = await tx.wait();
@@ -868,7 +903,7 @@ const chainId         = Number(process.env.PQ_CHAIN_ID ?? "11155111");
 const rpcUrl          = process.env.RPC_URL ?? getRpcDefault(pqNetwork);
 
 function getRpcDefault(network) {
-  const m = { sepolia: "https://rpc.sepolia.org", arbitrumSepolia: "https://sepolia-rollup.arbitrum.io/rpc", baseSepolia: "https://sepolia.base.org" };
+  const m = { sepolia: "https://rpc.sepolia.org", arbitrumSepolia: "https://sepolia-rollup.arbitrum.io/rpc", baseSepolia: "https://sepolia.base.org", base: "https://mainnet.base.org", arcTestnet: "https://rpc.testnet.arc.network" };
   return m[network] ?? "https://rpc.sepolia.org";
 }
 
@@ -1039,6 +1074,521 @@ while (Date.now() < deadline) {
   await new Promise(r => setTimeout(r, 3000));
 }
 console.log("Timed out waiting for receipt. The UserOp may still be pending.");
+`;
+}
+
+/**
+ * Script that registers the agent wallet with World AgentBook so it can be
+ * identified as human-backed by the @worldcoin/agentkit verification flow.
+ *
+ * Usage: just register-world   (or: node scripts/register-world-agent.mjs)
+ * Requires World App on your phone to complete the human verification QR flow.
+ */
+export function registerWorldAgentScriptSource(): string {
+  return `#!/usr/bin/env node
+/**
+ * Register agent wallet with World AgentBook.
+ *
+ * This links your agent's on-chain address to a verified human identity
+ * via World App. Once registered, any service using @worldcoin/agentkit
+ * can confirm your agent is human-backed.
+ *
+ * Prerequisites:
+ *   - World App installed on your phone
+ *   - AGENT_ADDRESS set in .env (the wallet your agent signs with)
+ *
+ * Run:
+ *   node scripts/register-world-agent.mjs
+ *   # or via justfile:
+ *   just register-world
+ */
+import "dotenv/config";
+import { execSync } from "node:child_process";
+
+const agentAddress = process.env.AGENT_ADDRESS;
+
+if (!agentAddress) {
+  console.error("Error: AGENT_ADDRESS is not set in .env");
+  process.exit(1);
+}
+
+console.log("\\n╔═══════════════════════════════════════════════════╗");
+console.log("║   World AgentBook Registration                    ║");
+console.log("╚═══════════════════════════════════════════════════╝");
+console.log("\\nAgent address : " + agentAddress);
+console.log("\\nThis will open a QR code. Scan it with World App to");
+console.log("prove you are human. Your identity is NOT revealed.");
+console.log("\\nRegistration is on World Chain (mainnet).");
+console.log("\\nStarting registration...\\n");
+
+try {
+  execSync(
+    "npx --yes @worldcoin/agentkit-cli register " + agentAddress,
+    { stdio: "inherit" }
+  );
+  console.log("\\n✓ Agent registered in World AgentBook!");
+  console.log("  Your agent is now verifiable as human-backed across");
+  console.log("  World Chain, Base, and Base Sepolia AgentBook deployments.");
+} catch (err) {
+  console.error("\\nRegistration failed. Make sure you have internet access");
+  console.error("and World App is installed on your phone.");
+  process.exit(1);
+}
+`;
+}
+
+/**
+ * Ledger APDU transport for ECDSA + ML-DSA hybrid signing.
+ * Node.js CLI version — uses hw-transport-node-hid instead of WebHID.
+ */
+export function ledgerTransportSource(): string {
+  return `/**
+ * Ledger APDU transport — Node.js CLI version.
+ *
+ * Firmware commands used:
+ *   GET_PUBLIC_KEY      (0x05) — ECDSA public key
+ *   ECDSA_SIGN_HASH     (0x15) — blind ECDSA hash sign
+ *   GET_MLDSA_SEED      (0x14) — derive ML-DSA seed on secure element
+ *   KEYGEN_DILITHIUM    (0x0c) — generate keypair from seed
+ *   SIGN_DILITHIUM      (0x0f) — init / absorb / finalize signing
+ *   GET_SIG_CHUNK       (0x12) — retrieve signature chunks
+ *   GET_PK_CHUNK        (0x13) — retrieve public key chunks
+ *   HYBRID_SIGN_USEROP  (0x17) — clear-sign ERC-4337 UserOp
+ *
+ * Requires the ZKNOX PQ Ledger app on the device.
+ */
+import TransportNodeHid from "@ledgerhq/hw-transport-node-hid";
+import { ethers } from "ethers";
+
+const CLA = 0xe0;
+const INS = {
+  GET_PUBLIC_KEY:     0x05,
+  ECDSA_SIGN_HASH:    0x15,
+  GET_MLDSA_SEED:     0x14,
+  KEYGEN_DILITHIUM:   0x0c,
+  SIGN_DILITHIUM:     0x0f,
+  GET_SIG_CHUNK:      0x12,
+  GET_PK_CHUNK:       0x13,
+  HYBRID_SIGN_USEROP: 0x17,
+};
+
+export const MLDSA44_SIG_BYTES = 2420;
+export const MLDSA44_PK_BYTES  = 1312;
+const CHUNK_SIZE = 255;
+
+function encodeBip32Path(path) {
+  const components = path.replace("m/", "").split("/").map(c => {
+    const hardened = c.endsWith("'");
+    const val = parseInt(hardened ? c.slice(0, -1) : c, 10);
+    return hardened ? (val + 0x80000000) >>> 0 : val;
+  });
+  const buf = Buffer.alloc(1 + components.length * 4);
+  buf[0] = components.length;
+  components.forEach((c, i) => buf.writeUInt32BE(c, 1 + i * 4));
+  return buf;
+}
+
+async function sendApdu(transport, ins, p1, p2, data) {
+  const payload  = data ? Buffer.from(data) : Buffer.alloc(0);
+  const response = await transport.send(CLA, ins, p1, p2, payload);
+  return response.subarray(0, response.length - 2);
+}
+
+async function readChunked(transport, ins, totalBytes) {
+  const buf = Buffer.alloc(totalBytes);
+  for (let p1 = 0; p1 * CHUNK_SIZE < totalBytes; p1++) {
+    const offset    = p1 * CHUNK_SIZE;
+    const remaining = totalBytes - offset;
+    const p2        = Math.min(remaining, CHUNK_SIZE);
+    const chunk     = await sendApdu(transport, ins, p1, p2, null);
+    chunk.copy(buf, offset, 0, p2);
+  }
+  return new Uint8Array(buf);
+}
+
+function bigintTo32BE(val) {
+  const hex = BigInt(val).toString(16).padStart(64, "0");
+  return Buffer.from(hex, "hex");
+}
+
+function addressToBytes(addr) {
+  return Buffer.from(addr.replace(/^0x/, ""), "hex");
+}
+
+function parseEcdsaResponse(resp) {
+  const derLen = resp[0];
+  const der    = resp.subarray(1, 1 + derLen);
+  const v      = resp[1 + derLen];
+  let offset = 2;
+  offset++;
+  const rLen = der[offset++];
+  const rRaw = der.subarray(offset, offset + rLen); offset += rLen;
+  offset++;
+  const sLen = der[offset++];
+  const sRaw = der.subarray(offset, offset + sLen);
+  const r = new Uint8Array(32);
+  const s = new Uint8Array(32);
+  r.set(rRaw.subarray(rRaw.length - 32));
+  s.set(sRaw.subarray(sRaw.length - 32));
+  return { v, r, s };
+}
+
+export async function openTransport() {
+  return TransportNodeHid.default
+    ? TransportNodeHid.default.open()
+    : TransportNodeHid.open();
+}
+
+export async function getEcdsaPublicKey(transport, bip32Path) {
+  const pathData = encodeBip32Path(bip32Path);
+  return new Uint8Array(await sendApdu(transport, INS.GET_PUBLIC_KEY, 0x00, 0x00, pathData));
+}
+
+export async function signEcdsaHash(transport, bip32Path, hash) {
+  if (hash.length !== 32) throw new Error("Hash must be 32 bytes");
+  const pathData = encodeBip32Path(bip32Path);
+  const payload  = Buffer.concat([pathData, Buffer.from(hash)]);
+  const resp     = await sendApdu(transport, INS.ECDSA_SIGN_HASH, 0x00, 0x00, payload);
+  return parseEcdsaResponse(resp);
+}
+
+export async function deriveMldsaSeed(transport, bip32Path) {
+  const pathData = encodeBip32Path(bip32Path);
+  const seed = await sendApdu(transport, INS.GET_MLDSA_SEED, 0x00, 0x00, pathData);
+  return new Uint8Array(seed);
+}
+
+export async function getMldsaPublicKey(transport) {
+  await sendApdu(transport, INS.KEYGEN_DILITHIUM, 0x00, 0x00, null);
+  return readChunked(transport, INS.GET_PK_CHUNK, MLDSA44_PK_BYTES);
+}
+
+export async function signMldsa(transport, messageBytes) {
+  await sendApdu(transport, INS.SIGN_DILITHIUM, 0x00, 0x00, null);
+  const MAX_APDU_DATA = 250;
+  for (let offset = 0; offset < messageBytes.length; offset += MAX_APDU_DATA) {
+    const chunk = messageBytes.slice(offset, Math.min(offset + MAX_APDU_DATA, messageBytes.length));
+    await sendApdu(transport, INS.SIGN_DILITHIUM, 0x01, 0x00, chunk);
+  }
+  const msgLenBuf = Buffer.alloc(2);
+  msgLenBuf.writeUInt16BE(messageBytes.length, 0);
+  await sendApdu(transport, INS.SIGN_DILITHIUM, 0x80, 0x00, msgLenBuf);
+  return readChunked(transport, INS.GET_SIG_CHUNK, MLDSA44_SIG_BYTES);
+}
+
+/**
+ * Clear-sign a full ERC-4337 v0.7 UserOp.
+ * The device recomputes the UserOpHash on-chip and shows human-readable
+ * fields on its screen before asking the user to confirm.
+ */
+export async function signHybridUserOp(transport, bip32Path, userOp, entryPoint, chainId) {
+  const I = INS.HYBRID_SIGN_USEROP;
+  await sendApdu(transport, I, 0x00, 0x00, encodeBip32Path(bip32Path));
+  await sendApdu(transport, I, 0x01, 0x00, Buffer.concat([
+    bigintTo32BE(chainId),
+    addressToBytes(entryPoint),
+    addressToBytes(userOp.sender),
+    bigintTo32BE(userOp.nonce),
+  ]));
+  await sendApdu(transport, I, 0x02, 0x00, Buffer.concat([
+    ethers.getBytes(ethers.keccak256(userOp.initCode)),
+    ethers.getBytes(ethers.keccak256(userOp.callData)),
+    ethers.getBytes(userOp.accountGasLimits),
+    bigintTo32BE(userOp.preVerificationGas),
+    ethers.getBytes(userOp.gasFees),
+    ethers.getBytes(ethers.keccak256(userOp.paymasterAndData)),
+  ]));
+  const rawCallData = ethers.getBytes(userOp.callData);
+  const callDataPayload = rawCallData.length <= CHUNK_SIZE
+    ? Buffer.from(rawCallData)
+    : Buffer.alloc(0);
+  const resp = await sendApdu(transport, I, 0x03, 0x00, callDataPayload);
+  const { v, r, s }   = parseEcdsaResponse(resp);
+  const mldsaSignature = await readChunked(transport, INS.GET_SIG_CHUNK, MLDSA44_SIG_BYTES);
+  return { ecdsaV: v, ecdsaR: r, ecdsaS: s, mldsaSignature };
+}
+`;
+}
+
+/**
+ * CLI script: send a UserOp via Ledger hardware wallet.
+ * Shows human-friendly tx details in terminal, then clear-signs on device.
+ */
+export function sendPQTransactionLedgerScriptSource(): string {
+  return `#!/usr/bin/env node
+/**
+ * Send a PQ ERC-4337 transaction signed by a Ledger hardware wallet.
+ *
+ * Flow:
+ *   1. Decode and display transaction details in human-friendly format
+ *   2. Estimate gas (dummy signature)
+ *   3. Connect Ledger (ZKNOX PQ app must be open on device)
+ *   4. Clear-sign on device — both ECDSA + ML-DSA-44 in one confirmation
+ *   5. Submit UserOp to bundler
+ *
+ * Prerequisites:
+ *   - ZKNOX PQ Ledger app installed and open on your device
+ *   - PQ_ACCOUNT_ADDRESS and BUNDLER_URL set in .env
+ *
+ * Usage:
+ *   node scripts/send-pq-transaction-ledger.mjs <to> <amountEth> [calldata]
+ *   just send-tx-ledger TO=0xRecipient VALUE=0.01
+ */
+import "dotenv/config";
+import { ethers } from "ethers";
+import {
+  openTransport,
+  signHybridUserOp,
+  signEcdsaHash,
+  deriveMldsaSeed,
+  signMldsa,
+  MLDSA44_SIG_BYTES,
+} from "./ledger-transport.mjs";
+
+const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+const BIP32_PATH  = "m/44'/60'/0'/0/0";
+
+// ── Args ──────────────────────────────────────────────────────────────────────
+const [,, toArg, amountArg, calldataArg] = process.argv;
+if (!toArg || !amountArg) {
+  console.error("Usage: node scripts/send-pq-transaction-ledger.mjs <to> <amountEth> [calldata]");
+  process.exit(1);
+}
+if (!ethers.isAddress(toArg)) { console.error("Invalid <to> address: " + toArg); process.exit(1); }
+
+// ── Env ───────────────────────────────────────────────────────────────────────
+const accountAddress = process.env.PQ_ACCOUNT_ADDRESS;
+const bundlerUrl     = process.env.BUNDLER_URL ?? "";
+const pqNetwork      = process.env.PQ_NETWORK ?? "sepolia";
+const chainId        = Number(process.env.PQ_CHAIN_ID ?? "11155111");
+const rpcUrl         = process.env.RPC_URL ?? getRpcDefault(pqNetwork);
+
+function getRpcDefault(network) {
+  const m = {
+    sepolia:         "https://rpc.sepolia.org",
+    arbitrumSepolia: "https://sepolia-rollup.arbitrum.io/rpc",
+    baseSepolia:     "https://sepolia.base.org",
+    base:            "https://mainnet.base.org",
+    arcTestnet:      "https://rpc.testnet.arc.network",
+  };
+  return m[network] ?? "https://rpc.sepolia.org";
+}
+
+if (!accountAddress) { console.error("Missing PQ_ACCOUNT_ADDRESS in .env"); process.exit(1); }
+if (!bundlerUrl)     { console.error("Missing BUNDLER_URL in .env");          process.exit(1); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function packUint128(a, b) {
+  return ethers.solidityPacked(["uint128", "uint128"], [a, b]);
+}
+
+function unpackUint128(packed) {
+  const bytes = ethers.getBytes(packed);
+  const first  = BigInt("0x" + ethers.hexlify(bytes.slice(0, 16)).slice(2));
+  const second = BigInt("0x" + ethers.hexlify(bytes.slice(16, 32)).slice(2));
+  return [first, second];
+}
+
+function getUserOpHash(userOp, entryPoint, cid) {
+  const abi = ethers.AbiCoder.defaultAbiCoder();
+  const packed = abi.encode(
+    ["address","uint256","bytes32","bytes32","bytes32","uint256","bytes32","bytes32"],
+    [userOp.sender, userOp.nonce,
+     ethers.keccak256(userOp.initCode), ethers.keccak256(userOp.callData),
+     userOp.accountGasLimits, userOp.preVerificationGas,
+     userOp.gasFees, ethers.keccak256(userOp.paymasterAndData)]
+  );
+  return ethers.keccak256(abi.encode(
+    ["bytes32","address","uint256"],
+    [ethers.keccak256(packed), entryPoint, cid]
+  ));
+}
+
+function userOpToBundlerFormat(userOp) {
+  const [verificationGasLimit, callGasLimit] = unpackUint128(userOp.accountGasLimits);
+  const [maxPriorityFeePerGas, maxFeePerGas] = unpackUint128(userOp.gasFees);
+  return {
+    sender: userOp.sender,
+    nonce:  "0x" + BigInt(userOp.nonce).toString(16),
+    callData: userOp.callData,
+    verificationGasLimit: "0x" + verificationGasLimit.toString(16),
+    callGasLimit:         "0x" + callGasLimit.toString(16),
+    preVerificationGas:   "0x" + BigInt(userOp.preVerificationGas).toString(16),
+    maxFeePerGas:         "0x" + maxFeePerGas.toString(16),
+    maxPriorityFeePerGas: "0x" + maxPriorityFeePerGas.toString(16),
+    signature: userOp.signature,
+  };
+}
+
+async function bundlerRpc(url, method, params) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(method + " failed: " + (json.error.message ?? JSON.stringify(json.error)));
+  return json.result;
+}
+
+/** Decode calldata to a human-readable summary. */
+function decodeCalldata(data, toAddress) {
+  if (!data || data === "0x" || data === "") return "  (no calldata — plain ETH transfer)";
+  const selector = data.slice(0, 10).toLowerCase();
+  const knownSelectors = {
+    "0xa9059cbb": "ERC-20 transfer(address to, uint256 amount)",
+    "0x095ea7b3": "ERC-20 approve(address spender, uint256 amount)",
+    "0x23b872dd": "ERC-20 transferFrom(address from, address to, uint256 amount)",
+    "0x40c10f19": "ERC-20 mint(address to, uint256 amount)",
+    "0x70a08231": "ERC-20 balanceOf(address account)",
+    "0x18160ddd": "ERC-20 totalSupply()",
+    "0xd0e30db0": "WETH deposit()",
+    "0x2e1a7d4d": "WETH withdraw(uint256 wad)",
+  };
+  const name = knownSelectors[selector] ?? ("Unknown function selector: " + selector);
+  return "  Function : " + name + "\\n  Raw data : " + data.slice(0, 66) + (data.length > 66 ? "..." : "");
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+const provider = new ethers.JsonRpcProvider(rpcUrl, { chainId, name: pqNetwork });
+const network  = await provider.getNetwork();
+const value    = ethers.parseEther(amountArg);
+const calldata = calldataArg ?? "0x";
+
+const accountBalance = await provider.getBalance(accountAddress);
+const [maxPriority, maxFee] = await (async () => {
+  try {
+    const gp = await bundlerRpc(bundlerUrl, "pimlico_getUserOperationGasPrice", []);
+    return [BigInt(gp.standard.maxPriorityFeePerGas), BigInt(gp.standard.maxFeePerGas)];
+  } catch {
+    return [ethers.parseUnits("0.1", "gwei"), ethers.parseUnits("0.2", "gwei")];
+  }
+})();
+
+const ACCOUNT_ABI = [
+  "function execute(address dest, uint256 value, bytes calldata func) external",
+  "function getNonce() external view returns (uint256)",
+];
+const account = new ethers.Contract(accountAddress, ACCOUNT_ABI, provider);
+let nonce;
+try { nonce = await account.getNonce(); } catch { nonce = 0n; }
+const executeCallData = account.interface.encodeFunctionData("execute", [toArg, value, calldata]);
+
+// ── Display transaction details ───────────────────────────────────────────────
+const estimatedGasCost = maxFee * 14_000_000n;
+console.log("\\n╔══════════════════════════════════════════════════════════════╗");
+console.log("║           PQ Transaction — Ledger Signing                   ║");
+console.log("╚══════════════════════════════════════════════════════════════╝");
+console.log("\\n  Network  : " + pqNetwork + " (chainId " + chainId + ")");
+console.log("  From     : " + accountAddress + " (smart account)");
+console.log("  To       : " + toArg);
+console.log("  Value    : " + amountArg + " ETH");
+console.log("  Balance  : " + ethers.formatEther(accountBalance) + " ETH");
+console.log("  Nonce    : " + nonce.toString());
+console.log("  Est. fee : ~" + ethers.formatEther(estimatedGasCost) + " ETH (gas)");
+console.log("\\n  Call data:");
+console.log(decodeCalldata(calldata, toArg));
+console.log("\\n  Signature: ECDSA + ML-DSA-44 (hybrid PQ)");
+console.log("  Bundler  : " + bundlerUrl.replace(/apikey=[^&]+/, "apikey=***"));
+
+if (accountBalance < value) {
+  console.error("\\n✗ Insufficient balance.");
+  process.exit(1);
+}
+
+// ── Build UserOp for gas estimation ──────────────────────────────────────────
+let userOp = {
+  sender: accountAddress,
+  nonce,
+  initCode: "0x",
+  callData: executeCallData,
+  accountGasLimits: packUint128(13_500_000n, 500_000n),
+  preVerificationGas: 1_000_000n,
+  gasFees: packUint128(maxPriority, maxFee),
+  paymasterAndData: "0x",
+  signature: ethers.AbiCoder.defaultAbiCoder().encode(
+    ["bytes", "bytes"],
+    [new Uint8Array(65).fill(0xff), new Uint8Array(MLDSA44_SIG_BYTES).fill(0xff)]
+  ),
+};
+
+console.log("\\n  Estimating gas...");
+const est = await bundlerRpc(bundlerUrl, "eth_estimateUserOperationGas", [userOpToBundlerFormat(userOp), ENTRY_POINT]);
+const MIN_VGL = 13_500_000n;
+const verificationGasLimit = BigInt(est.verificationGasLimit) < MIN_VGL ? MIN_VGL : BigInt(est.verificationGasLimit);
+const callGasLimit         = BigInt(est.callGasLimit);
+const preVerificationGas   = BigInt(est.preVerificationGas || userOp.preVerificationGas) * 4n;
+userOp.accountGasLimits  = packUint128(verificationGasLimit, callGasLimit);
+userOp.preVerificationGas = preVerificationGas;
+console.log("  Gas OK   : verif=" + verificationGasLimit + " call=" + callGasLimit);
+
+// ── Connect Ledger ────────────────────────────────────────────────────────────
+console.log("\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+console.log("  Connect your Ledger, unlock it, and open the ZKNOX PQ app.");
+console.log("  The device will display transaction details for confirmation.");
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+console.log("\\n  Waiting for Ledger...");
+
+let transport;
+try {
+  transport = await openTransport();
+  console.log("  ✓ Ledger connected");
+} catch (err) {
+  console.error("\\n✗ Could not connect to Ledger: " + err.message);
+  console.error("  Make sure the device is plugged in, unlocked, and the ZKNOX PQ app is open.");
+  process.exit(1);
+}
+
+// ── Sign on device ────────────────────────────────────────────────────────────
+let ecdsaSig, mldsaSig;
+try {
+  console.log("  Sending to device for review and signing...");
+  const result = await signHybridUserOp(
+    transport,
+    BIP32_PATH,
+    userOp,
+    ENTRY_POINT,
+    network.chainId
+  );
+  ecdsaSig = ethers.hexlify(ethers.concat([result.ecdsaR, result.ecdsaS, ethers.toBeHex(result.ecdsaV + 27, 1)]));
+  mldsaSig = ethers.hexlify(result.mldsaSignature);
+  console.log("  ✓ Signed on Ledger (ECDSA + ML-DSA-44)");
+} catch (err) {
+  console.error("\\n✗ Ledger signing failed: " + err.message);
+  if (err.message.includes("0x6e00") || err.message.includes("INS_NOT_SUPPORTED")) {
+    console.error("  The ZKNOX PQ app may not be installed. Make sure you have the correct app open.");
+  }
+  if (err.message.includes("0x6985") || err.message.includes("Conditions")) {
+    console.error("  User rejected the transaction on device.");
+  }
+  try { await transport.close(); } catch (_) {}
+  process.exit(1);
+} finally {
+  try { await transport.close(); } catch (_) {}
+}
+
+userOp.signature = ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "bytes"], [ecdsaSig, mldsaSig]);
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+console.log("\\n  Submitting UserOp to bundler...");
+const userOpHash = await bundlerRpc(bundlerUrl, "eth_sendUserOperation", [userOpToBundlerFormat(userOp), ENTRY_POINT]);
+console.log("  ✓ Submitted — userOpHash: " + userOpHash);
+console.log("  Waiting for receipt...");
+
+const deadline = Date.now() + 120_000;
+while (Date.now() < deadline) {
+  try {
+    const receipt = await bundlerRpc(bundlerUrl, "eth_getUserOperationReceipt", [userOpHash]);
+    if (receipt) {
+      console.log("\\n✓ Transaction mined!");
+      if (receipt.receipt?.transactionHash) console.log("  Tx: " + receipt.receipt.transactionHash);
+      if (receipt.success === false) console.log("  WARNING: UserOp execution reverted on-chain");
+      process.exit(0);
+    }
+  } catch { /* keep polling */ }
+  await new Promise(r => setTimeout(r, 3000));
+}
+console.log("  Timed out — the UserOp may still be pending.");
 `;
 }
 

@@ -7,7 +7,7 @@
  * The wizard and prompts will automatically pick it up.
  */
 
-export type PQNetworkKey = "sepolia" | "arbitrumSepolia" | "baseSepolia";
+export type PQNetworkKey = "sepolia" | "arbitrumSepolia" | "baseSepolia" | "base" | "arcTestnet";
 
 /** Only ML-DSA-44 is supported. Falcon uses a custom WASM compact encoding incompatible with @noble/post-quantum. */
 export type PQSchemeKey = "mldsa";
@@ -60,10 +60,36 @@ export const PQ_DEPLOYMENTS: Record<PQNetworkKey, PQNetworkDeployment> = {
     bundlerHint: "https://api.pimlico.io/v2/base-sepolia/rpc?apikey=YOUR_KEY",
     factories: {
       mldsa: {
+        address: "0x4834c1D95DC8cE8c40D611Ae7576891368811589",
+        postQuantum: "mldsa",
+        preQuantum: "ecdsa_k1",
+        saltLabel: "PQ_AGENTS_MLDSA_K1_FACTORY_V0_0_1",
+      },
+    },
+  },
+  base: {
+    chainId: 8453,
+    rpcHint: "https://mainnet.base.org",
+    bundlerHint: "https://api.pimlico.io/v2/base/rpc?apikey=YOUR_KEY",
+    factories: {
+      mldsa: {
         address: "0xF45104FCfBB9233cEa6D516d71ba57F6961B8C2e",
         postQuantum: "mldsa",
         preQuantum: "ecdsa_k1",
         saltLabel: "ZKNOX_MLDSA_K1_FACTORY_V0_0_10",
+      },
+    },
+  },
+  arcTestnet: {
+    chainId: 5042002,
+    rpcHint: "https://rpc.testnet.arc.network",
+    bundlerHint: "https://rpc.testnet.arc.network",
+    factories: {
+      mldsa: {
+        address: "0xE6388d202979da19fC5Db7cC87e925228951fB36",
+        postQuantum: "mldsa",
+        preQuantum: "ecdsa_k1",
+        saltLabel: "PQ_AGENTS_MLDSA_K1_FACTORY_V0_0_1",
       },
     },
   },
@@ -73,6 +99,8 @@ export const NETWORK_LABELS: Record<PQNetworkKey, string> = {
   sepolia: "Sepolia (Ethereum testnet)",
   arbitrumSepolia: "Arbitrum Sepolia",
   baseSepolia: "Base Sepolia",
+  base: "Base (mainnet)",
+  arcTestnet: "ARC Testnet",
 };
 
 export const SCHEME_LABELS: Record<PQSchemeKey, string> = {

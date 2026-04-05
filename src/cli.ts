@@ -569,6 +569,15 @@ async function main() {
   envVars["DEPLOYER_ADDRESS"] = deployer.address;
   envVars["DEPLOYER_PRIVATE_KEY"] = deployer.privateKey;
 
+  // Agent identity and skills — edit these to give your agent a persona
+  envVars["AGENT_NAME"] = w.projectName ?? "Agent";
+  envVars["AGENT_PERSONA"] =
+    "You are an onchain AI agent. You help users interact with smart contracts, manage wallets, and execute blockchain transactions.";
+  envVars["AGENT_SKILLS"] =
+    "onchain transactions, wallet management, smart contract interaction, post-quantum signing";
+  // Peer agents — comma-separated list of peer agent HTTP base URLs for agent-to-agent messaging
+  envVars["AGENT_PEERS"] = "";
+
   if (agent) {
     envVars["AGENT_ADDRESS"] = agent.address;
     envVars["AGENT_PRIVATE_KEY"] = agent.privateKey;
@@ -590,6 +599,12 @@ async function main() {
     envVars["PQ_SCHEME"] = w.pqScheme ?? "mldsa";
     envVars["PQ_FACTORY_ADDRESS"] = w.pqFactoryAddress ?? "";
     envVars["BUNDLER_URL"] = w.bundlerUrl ?? "";
+    // PQ_ACCOUNT_TYPE: "base" (default) or "agent" (with spending limits)
+    envVars["PQ_ACCOUNT_TYPE"] = "base";
+    // Agent account spending limits (only used when PQ_ACCOUNT_TYPE=agent)
+    envVars["MAX_ETH_PER_TX"] = "0";
+    envVars["MAX_USDC_PER_TX"] = "0";
+    envVars["USDC_ADDRESS"] = "0x0000000000000000000000000000000000000000";
     // PQ_ACCOUNT_ADDRESS will be written by scripts/deploy-pq-account.mjs after deployment
     envVars["PQ_ACCOUNT_ADDRESS"] = "";
     if (framework === "nextjs") {
