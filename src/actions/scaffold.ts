@@ -29,6 +29,20 @@ import {
   agentSwarmContextSource,
   swarmPageSource,
 } from "../scaffold-templates/agent-swarm.js";
+import {
+  pqHexSource,
+  pqUtilsMldsaSource,
+  pqCreateAccountSource,
+  pqUserOperationSource,
+  pqSendTransactionSource,
+  pqConfigSource,
+  deployPQAccountScriptSource,
+  deployPQAccountArcScriptSource,
+  sendPQTransactionScriptSource,
+  registerWorldAgentScriptSource,
+  ledgerTransportSource,
+  sendPQTransactionLedgerScriptSource,
+} from "../scaffold-templates/pq-account.js";
 import { balancesPageSource } from "../scaffold-templates/balances-page.js";
 import { ensPageSource } from "../scaffold-templates/ens-page.js";
 import { identityPageSource } from "../scaffold-templates/identity-page.js";
@@ -235,6 +249,13 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     if (config.installAmpersendSdk) {
       rootDevDeps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
     }
+  }
+  if (config.pqAccount) {
+    rootDevDeps["@noble/post-quantum"] = "^0.2.0";
+    rootDevDeps["@noble/hashes"] = "^1.4.0";
+    rootDevDeps["ethers"] = "^6.16.0";
+    rootDevDeps["dotenv"] = "^16.4.0";
+    rootDevDeps["@ledgerhq/hw-transport-node-hid"] = "^6.28.0";
   }
 
   const pkg = {
@@ -586,7 +607,39 @@ function writeJustfile(root: string, config: ScaffoldConfig) {
     "generate:",
     "    node scripts/generate-deployer.mjs",
     "",
+    "# Send a message to a peer agent and print its reply",
+    "# Usage: just send-agent-msg peer_url=http://localhost:3001 msg='Hello agent'",
+    "send-agent-msg peer_url msg:",
+    "    node scripts/send-agent-message.mjs {{peer_url}} {{msg}}",
+    "",
   );
+
+  if (config.pqAccount) {
+    lines.push(
+      "# Deploy ZKNOX PQ account on Sepolia (t1 pre-shifted — old verifier bytecode)",
+      "deploy-pq:",
+      "    node scripts/with-secrets.mjs -- node scripts/deploy-pq-account.mjs",
+      "",
+      "# Deploy ZKNOX PQ account on ARC testnet or Base Sepolia (t1 raw — new verifier bytecode)",
+      "deploy-pq-arc:",
+      "    node scripts/with-secrets.mjs -- node scripts/deploy-pq-account-arc.mjs",
+      "",
+      "# Send ETH from the PQ smart account via ERC-4337 bundler",
+      "# Usage: just send-pq to=0xRecipient amount=0.0001",
+      "send-pq to amount calldata='0x':",
+      "    node scripts/with-secrets.mjs -- node scripts/send-pq-transaction.mjs {{to}} {{amount}} {{calldata}}",
+      "",
+      "# Register agent wallet with World AgentBook (scan QR with World App)",
+      "register-world:",
+      "    node scripts/register-world-agent.mjs",
+      "",
+      "# Send ETH from the PQ smart account using a Ledger hardware wallet (clear-signing)",
+      "# Usage: just send-tx-ledger TO=0xRecipient VALUE=0.0001",
+      "send-tx-ledger TO VALUE calldata='0x':",
+      "    node scripts/send-pq-transaction-ledger.mjs {{TO}} {{VALUE}} {{calldata}}",
+      "",
+    );
+  }
 
   file(root, "justfile", lines.join("\n"));
 }
@@ -623,6 +676,18 @@ function writeScripts(root: string, config: ScaffoldConfig) {
     file(scripts, "show-balances-all-chains.ts", getShowBalancesAllChainsScript());
     file(scripts, "swarm-agents.mjs", getSwarmAgentsScript());
   }
+
+  if (config.pqAccount) {
+    file(scripts, "deploy-pq-account.mjs", deployPQAccountScriptSource());
+    file(scripts, "deploy-pq-account-arc.mjs", deployPQAccountArcScriptSource());
+    file(scripts, "send-pq-transaction.mjs", sendPQTransactionScriptSource());
+    file(scripts, "register-world-agent.mjs", registerWorldAgentScriptSource());
+    file(scripts, "ledger-transport.mjs", ledgerTransportSource());
+    file(scripts, "send-pq-transaction-ledger.mjs", sendPQTransactionLedgerScriptSource());
+  }
+
+  // Agent-to-agent messaging script (always generated)
+  file(scripts, "send-agent-message.mjs", getSendAgentMessageScript());
 
   // ── generate-abi-types.mjs ──────────────────────────────────────────────
   const abiScript = `#!/usr/bin/env node
@@ -2302,8 +2367,10 @@ const billingMode =
   "${billingModeDefault}";
 
 /** Gemini: call Google API directly when a key is available (Shroud /chat/completions → Gemini is broken). */
-const CHAT_SYSTEM =
-  "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+const agentName = process.env.AGENT_NAME || "Agent";
+const agentPersona = process.env.AGENT_PERSONA || "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+const agentSkills = process.env.AGENT_SKILLS ? "\\nYour skills: " + process.env.AGENT_SKILLS + "." : "";
+const CHAT_SYSTEM = agentPersona + agentSkills;
 
 const STREAM_CHUNK =
   Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
@@ -2855,6 +2922,11 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
   }
+  if (config.pqAccount) {
+    deps["@noble/post-quantum"] = "^0.2.0";
+    deps["@noble/hashes"] = "^1.4.0";
+    deps["ethers"] = "^6.16.0";
+  }
 
   file(
     pkg,
@@ -3028,6 +3100,16 @@ module.exports = nextConfig;
   file(pkg, "lib/burner-auto-connect.tsx", burnerAutoConnectSource());
   file(pkg, "lib/wagmi-config.ts", wagmiConfigSource(config.projectName, "next"));
   file(pkg, "lib/web3-providers.tsx", web3ProvidersSource("next"));
+
+  if (config.pqAccount) {
+    const pqDir = dir(pkg, "lib", "pq");
+    file(pqDir, "hex.ts", pqHexSource());
+    file(pqDir, "utils-mldsa.ts", pqUtilsMldsaSource());
+    file(pqDir, "create-account.ts", pqCreateAccountSource());
+    file(pqDir, "user-operation.ts", pqUserOperationSource());
+    file(pqDir, "send-transaction.ts", pqSendTransactionSource());
+    file(pqDir, "pq-config.ts", pqConfigSource("nextjs"));
+  }
   file(pkg, "components/ConnectWalletButton.tsx", connectWalletButtonSource());
   file(pkg, "components/LocalFaucetButton.tsx", localFaucetButtonSource());
   file(
@@ -3226,8 +3308,10 @@ const billingMode =
   (process.env.SHROUD_BILLING_MODE as "token_billing" | "provider_api_key") ||
   "${billingModeDefault}";
 
-const CHAT_SYSTEM =
-  "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+const agentName = process.env.AGENT_NAME || "Agent";
+const agentPersona = process.env.AGENT_PERSONA || "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+const agentSkills = process.env.AGENT_SKILLS ? "\\nYour skills: " + process.env.AGENT_SKILLS + "." : "";
+const CHAT_SYSTEM = agentPersona + agentSkills;
 
 const STREAM_CHUNK =
   Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
@@ -3718,6 +3802,11 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
   }
+  if (config.pqAccount) {
+    deps["@noble/post-quantum"] = "^0.2.0";
+    deps["@noble/hashes"] = "^1.4.0";
+    deps["ethers"] = "^6.16.0";
+  }
 
   file(
     pkg,
@@ -3842,6 +3931,16 @@ interface ImportMeta {
   file(pkg, "src/lib/agent-swarm.tsx", agentSwarmContextSource("vite"));
   file(pkg, "src/lib/wagmi-config.ts", wagmiConfigSource(config.projectName, "vite"));
   file(pkg, "src/lib/web3-providers.tsx", web3ProvidersSource("vite"));
+
+  if (config.pqAccount) {
+    const pqDir = dir(pkg, "src", "lib", "pq");
+    file(pqDir, "hex.ts", pqHexSource());
+    file(pqDir, "utils-mldsa.ts", pqUtilsMldsaSource());
+    file(pqDir, "create-account.ts", pqCreateAccountSource());
+    file(pqDir, "user-operation.ts", pqUserOperationSource());
+    file(pqDir, "send-transaction.ts", pqSendTransactionSource());
+    file(pqDir, "pq-config.ts", pqConfigSource("vite"));
+  }
   file(pkg, "src/components/ConnectWalletButton.tsx", connectWalletButtonSource());
   file(pkg, "src/components/PageLoading.tsx", vitePageLoadingSource());
   file(pkg, "src/components/ui/button.tsx", BUTTON_TSX);
@@ -4025,6 +4124,95 @@ if __name__ == "__main__":
   );
 
   gitkeep(join(pkg, "tests"));
+}
+
+// ── Agent-to-agent messaging script ─────────────────────────────────────────
+
+function getSendAgentMessageScript(): string {
+  return `#!/usr/bin/env node
+/**
+ * Send a message to a peer agent and print its reply.
+ *
+ * The peer agent must expose a POST /api/chat endpoint (standard scaffold layout).
+ * Two agents can talk to each other by each running \`just start\` on different ports
+ * and calling this script with the other agent's base URL.
+ *
+ * Usage:
+ *   node scripts/send-agent-message.mjs <peer_url> <message>
+ *   just send-agent-msg peer_url=http://localhost:3001 msg="Hello agent"
+ *
+ * AGENT_PEERS in .env is a comma-separated list of known peer URLs.
+ * This script reads AGENT_NAME from .env to identify itself in the request.
+ */
+import "dotenv/config";
+
+const [, , peerUrl, ...msgParts] = process.argv;
+if (!peerUrl || msgParts.length === 0) {
+  console.error("Usage: node scripts/send-agent-message.mjs <peer_url> <message>");
+  console.error("  e.g. node scripts/send-agent-message.mjs http://localhost:3001 \\"Hello, who are you?\\"");
+  process.exit(1);
+}
+
+const message = msgParts.join(" ");
+const myName = process.env.AGENT_NAME || "Agent";
+const chatEndpoint = peerUrl.replace(/\\/$/, "") + "/api/chat";
+
+console.log("\\nSending message to peer agent");
+console.log("  From  : " + myName);
+console.log("  To    : " + chatEndpoint);
+console.log("  Msg   : " + message);
+console.log("");
+
+let reply = "";
+try {
+  const res = await fetch(chatEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Agent-Sender": myName,
+    },
+    body: JSON.stringify({
+      messages: [{ role: "user", content: message }],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error("Peer responded with HTTP " + res.status + ": " + body);
+    process.exit(1);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+
+  if (contentType.includes("text/event-stream")) {
+    // Streaming SSE response — collect all data chunks
+    const text = await res.text();
+    for (const line of text.split("\\n")) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") break;
+      try {
+        const chunk = JSON.parse(payload);
+        const delta = chunk.choices?.[0]?.delta?.content ?? "";
+        reply += delta;
+      } catch { /* skip malformed chunks */ }
+    }
+  } else {
+    // Non-streaming JSON response
+    const json = await res.json();
+    reply = json.choices?.[0]?.message?.content ?? json.reply ?? JSON.stringify(json);
+  }
+} catch (err) {
+  console.error("Failed to reach peer agent at " + chatEndpoint);
+  console.error(err.message);
+  process.exit(1);
+}
+
+console.log("Reply from peer:");
+console.log("─".repeat(60));
+console.log(reply.trim());
+console.log("─".repeat(60));
+`;
 }
 
 // ── Public entry ────────────────────────────────────────────────────────────

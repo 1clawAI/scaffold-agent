@@ -169,6 +169,8 @@ export async function setupOneClaw(
      * still register a 1Claw API agent so ONECLAW_AGENT_ID + key are returned.
      */
     registerShroudAgent?: boolean;
+    /** PQ seed for ML-DSA-44 — stored alongside the agent key when pqAccount is enabled. */
+    postQuantumSeed?: string;
   },
 ): Promise<OneClawResult> {
   const token = await getToken(apiKey);
@@ -183,6 +185,10 @@ export async function setupOneClaw(
     agentInfo = await registerAgent(token, `${projectName}-agent`);
   } else if (options?.registerShroudAgent) {
     agentInfo = await registerAgent(token, `${projectName}-shroud`);
+  }
+
+  if (options?.postQuantumSeed) {
+    await storeSecret(token, vaultId, "private-keys/post-quantum-seed", options.postQuantumSeed);
   }
 
   if (options?.llmApiKey?.trim()) {

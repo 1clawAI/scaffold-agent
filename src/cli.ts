@@ -18,7 +18,7 @@ import {
   type AgentFileExtras,
 } from "./agent-project-config.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
-import { generateWallet } from "./actions/keys.js";
+import { generatePQSeed, generateWallet } from "./actions/keys.js";
 import { writeEnvFile } from "./actions/env.js";
 import { setupOneClaw } from "./actions/oneclaw.js";
 import { scaffoldProject } from "./actions/scaffold.js";
@@ -99,6 +99,13 @@ Shroud (only when --llm oneclaw):
   --oneclaw-agent-id <uuid>   Required with -y when --secrets is not oneclaw and --llm oneclaw
   --oneclaw-agent-api-key     Agent ocv_ key (same conditions)
 
+Post-quantum smart account (ERC-4337 + ML-DSA-44 hybrid):
+  --pq-account                Enable ZKNOX ERC-4337 smart account (ECDSA + ML-DSA-44)
+  --pq-network <network>      sepolia | arbitrumSepolia | baseSepolia  (default: sepolia)
+  --pq-scheme <scheme>        mldsa | falcon | mldsaeth | ethfalcon  (default: mldsa)
+  --pq-factory-address <addr> Override factory address (auto-resolved from deployments if omitted)
+  --bundler-url <url>         ERC-4337 bundler URL (e.g. Pimlico)
+
 Chain & UI:
   --chain <framework>         foundry | hardhat | none
   --framework <ui>            nextjs | vite | python
@@ -106,6 +113,7 @@ Chain & UI:
 Automation:
   --skip-npm-install          Skip npm install at the end
   --skip-auto-fund            Skip scripts/fund-deployer.mjs after scaffold
+  --deployer-private-key      Reuse an existing deployer wallet (0x + 64 hex) instead of generating one
 
 Arguments:
   project-name                Same as --project (only one positional allowed)
@@ -391,8 +399,17 @@ async function main() {
   // ── Key generation ────────────────────────────────────────────────────
   section("Generating Keys");
 
-  const deployer = generateWallet();
-  success("Generated deployer wallet");
+  let deployer: { address: string; privateKey: string };
+  const deployerPk = w.deployerPrivateKey;
+  if (deployerPk) {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const acct = privateKeyToAccount(deployerPk as `0x${string}`);
+    deployer = { address: acct.address, privateKey: deployerPk };
+    success("Using provided deployer wallet");
+  } else {
+    deployer = generateWallet();
+    success(w.deployerPrivateKey === undefined ? "Generated deployer wallet" : "Generated temporary deployer wallet (replace via `just generate`)");
+  }
   keyValue("Address", deployer.address);
 
   let agent: { address: string; privateKey: string } | undefined;
@@ -418,6 +435,25 @@ async function main() {
         keyValue(s.id, s.address);
       }
     }
+  }
+
+  // ── Post-quantum smart account ───────────────────────────────────────
+  let pqSeed: string | undefined;
+  if (w.pqAccount && agent) {
+    section("Post-Quantum Smart Account");
+    pqSeed = generatePQSeed();
+    success("Generated post-quantum seed (ML-DSA-44)");
+    info(`Network: ${w.pqNetwork} (chainId ${w.pqChainId})`);
+    info(`Scheme:  ${w.pqScheme}`);
+    info(`Factory: ${w.pqFactoryAddress}`);
+    console.log("");
+    info(
+      `Fund ${chalk.cyan(deployer.address)} with testnet ETH on ${w.pqNetwork}`,
+    );
+    info(
+      "Then run: " + chalk.cyan("node scripts/deploy-pq-account.mjs") +
+      " to deploy your smart account.",
+    );
   }
 
   // ── 1Claw vault setup ────────────────────────────────────────────────
@@ -449,6 +485,7 @@ async function main() {
             shroudProviderKeyForVault && shroudVaultPath
               ? { path: shroudVaultPath, value: shroudProviderKeyForVault }
               : undefined,
+          postQuantumSeed: pqSeed,
         },
       );
       vaultId = result.vaultId;
@@ -502,6 +539,17 @@ async function main() {
     shroudBillingMode,
     oneClawVaultId: vaultId,
     agentConfigExtra: w.agentFileExtras?.extra,
+    pqAccount:
+      w.pqAccount && agent && pqSeed
+        ? {
+            scheme: w.pqScheme ?? "mldsa",
+            network: w.pqNetwork ?? "sepolia",
+            chainId: w.pqChainId ?? 11155111,
+            postQuantumSeed: pqSeed,
+            factoryAddress: w.pqFactoryAddress ?? "",
+            bundlerUrl: w.bundlerUrl ?? "",
+          }
+        : undefined,
   };
 
   try {
@@ -521,6 +569,15 @@ async function main() {
   envVars["DEPLOYER_ADDRESS"] = deployer.address;
   envVars["DEPLOYER_PRIVATE_KEY"] = deployer.privateKey;
 
+  // Agent identity and skills — edit these to give your agent a persona
+  envVars["AGENT_NAME"] = w.projectName ?? "Agent";
+  envVars["AGENT_PERSONA"] =
+    "You are an onchain AI agent. You help users interact with smart contracts, manage wallets, and execute blockchain transactions.";
+  envVars["AGENT_SKILLS"] =
+    "onchain transactions, wallet management, smart contract interaction, post-quantum signing";
+  // Peer agents — comma-separated list of peer agent HTTP base URLs for agent-to-agent messaging
+  envVars["AGENT_PEERS"] = "";
+
   if (agent) {
     envVars["AGENT_ADDRESS"] = agent.address;
     envVars["AGENT_PRIVATE_KEY"] = agent.privateKey;
@@ -533,6 +590,31 @@ async function main() {
       privateKey,
     }));
     envVars["SWARM_AGENT_KEYS_JSON"] = JSON.stringify(extraKeys);
+  }
+
+  if (pqSeed && w.pqAccount) {
+    envVars["POST_QUANTUM_SEED"] = pqSeed;
+    envVars["PQ_NETWORK"] = w.pqNetwork ?? "sepolia";
+    envVars["PQ_CHAIN_ID"] = String(w.pqChainId ?? 11155111);
+    envVars["PQ_SCHEME"] = w.pqScheme ?? "mldsa";
+    envVars["PQ_FACTORY_ADDRESS"] = w.pqFactoryAddress ?? "";
+    envVars["BUNDLER_URL"] = w.bundlerUrl ?? "";
+    // PQ_ACCOUNT_TYPE: "base" (default) or "agent" (with spending limits)
+    envVars["PQ_ACCOUNT_TYPE"] = "base";
+    // Agent account spending limits (only used when PQ_ACCOUNT_TYPE=agent)
+    envVars["MAX_ETH_PER_TX"] = "0";
+    envVars["MAX_USDC_PER_TX"] = "0";
+    envVars["USDC_ADDRESS"] = "0x0000000000000000000000000000000000000000";
+    // PQ_ACCOUNT_ADDRESS will be written by scripts/deploy-pq-account.mjs after deployment
+    envVars["PQ_ACCOUNT_ADDRESS"] = "";
+    if (framework === "nextjs") {
+      envVars["NEXT_PUBLIC_PQ_FACTORY_ADDRESS"] = w.pqFactoryAddress ?? "";
+      envVars["NEXT_PUBLIC_BUNDLER_URL"] = w.bundlerUrl ?? "";
+    }
+    if (framework === "vite") {
+      envVars["VITE_PQ_FACTORY_ADDRESS"] = w.pqFactoryAddress ?? "";
+      envVars["VITE_BUNDLER_URL"] = w.bundlerUrl ?? "";
+    }
   }
 
   if (framework === "nextjs") {

@@ -31,7 +31,8 @@ export type NetworkKey =
   | "baseSepolia"
   | "polygon"
   | "bnb"
-  | "localhost";
+  | "localhost"
+  | "arcTestnet";
 
 export type TokenDef = {
   symbol: string;
@@ -211,6 +212,16 @@ export const NETWORKS: Record<NetworkKey, NetworkDefinition> = {
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorerUrl: "http://localhost:8545",
+    agent0SubgraphUrl: "",
+    tokens: [],
+  },
+  arcTestnet: {
+    key: "arcTestnet",
+    chainId: 5042002,
+    name: "ARC Testnet",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrl: "https://rpc.testnet.arc.network",
+    blockExplorerUrl: "https://explorer.testnet.arc.network",
     agent0SubgraphUrl: "",
     tokens: [],
   },

@@ -62,6 +62,8 @@ export type CliFlagValues = {
   framework?: string;
   "skip-npm-install"?: boolean;
   "skip-auto-fund"?: boolean;
+  /** Reuse an existing funded deployer wallet instead of generating a new one. */
+  "deployer-private-key"?: string;
   /** Total agent wallets when generating (1–64). */
   swarm?: string;
   /** Load defaults from agent.json (merged; CLI overrides). */
@@ -70,6 +72,16 @@ export type CliFlagValues = {
   "dump-config"?: boolean;
   /** Write --dump-config output to this file instead of stdout. */
   "dump-config-out"?: string;
+  /** Enable ERC-4337 post-quantum smart account (ML-DSA-44 hybrid). */
+  "pq-account"?: boolean;
+  /** Network for PQ account: sepolia | arbitrumSepolia | baseSepolia. */
+  "pq-network"?: string;
+  /** Post-quantum scheme: mldsa | falcon | mldsaeth | ethfalcon (default: mldsa). */
+  "pq-scheme"?: string;
+  /** Override ZKNOX factory address (auto-resolved from deployments if omitted). */
+  "pq-factory-address"?: string;
+  /** ERC-4337 bundler URL (e.g. Pimlico). */
+  "bundler-url"?: string;
 };
 
 export type ParsedScaffoldArgv = {
@@ -138,10 +150,16 @@ export function parseScaffoldArgv(argv: string[]): ParsedScaffoldArgv {
       framework: { type: "string" },
       "skip-npm-install": { type: "boolean" },
       "skip-auto-fund": { type: "boolean" },
+      "deployer-private-key": { type: "string" },
       swarm: { type: "string" },
       "from-config": { type: "string" },
       "dump-config": { type: "boolean" },
       "dump-config-out": { type: "string" },
+      "pq-account": { type: "boolean" },
+      "pq-network": { type: "string" },
+      "pq-scheme": { type: "string" },
+      "pq-factory-address": { type: "string" },
+      "bundler-url": { type: "string" },
     },
     allowPositionals: true,
     strict: true,

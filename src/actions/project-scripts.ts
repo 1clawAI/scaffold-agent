@@ -236,6 +236,8 @@ const DEFAULT_RPC = {
   polygon: "https://polygon-rpc.com",
   bnb: "https://bsc-dataseed.binance.org",
   bsc: "https://bsc-dataseed.binance.org",
+  arcTestnet: "https://rpc.testnet.arc.network",
+  arc: "https://rpc.testnet.arc.network",
 };
 
 const CHAIN_IDS = {
@@ -248,6 +250,8 @@ const CHAIN_IDS = {
   polygon: 137,
   bnb: 56,
   bsc: 56,
+  arcTestnet: 5042002,
+  arc: 5042002,
 };
 
 /** \`forge verify-contract --chain <x>\` */
@@ -261,6 +265,8 @@ const FORGE_CHAIN = {
   polygon: "polygon",
   bnb: "bsc",
   bsc: "bsc",
+  arcTestnet: "5042002",
+  arc: "5042002",
 };
 
 const ALIASES = {
@@ -272,6 +278,9 @@ const ALIASES = {
   base_sepolia: "baseSepolia",
   "base-sepolia": "baseSepolia",
   basesepolia: "baseSepolia",
+  arc_testnet: "arcTestnet",
+  "arc-testnet": "arcTestnet",
+  "5042002": "arcTestnet",
 };
 
 export function normalizeNetwork(name) {
@@ -1297,6 +1306,12 @@ async function main() {
     console.log("  RESET_SKIP_SHROUD_AGENT=1 — skipping agent registration.");
   } else {
     agentInfo = await registerAgent(token, pkgName + "-shroud");
+  }
+
+  const pqSeed = (process.env.POST_QUANTUM_SEED || "").trim();
+  if (pqSeed) {
+    await storeSecret(token, vaultId, "private-keys/post-quantum-seed", pqSeed, "private_key");
+    console.log("  Stored post-quantum seed in vault.");
   }
 
   const llmKey = (process.env.RESET_COPY_LLM_API_KEY || "").trim();
