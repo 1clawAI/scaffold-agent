@@ -17,6 +17,7 @@ import {
   getReset1clawSetupScript,
   getRegisterAgentScript,
   getSecretAddScript,
+  getShipScript,
   getShowAccountsScript,
   getShowBalancesAllChainsScript,
   getSwarmAgentsScript,
@@ -287,6 +288,8 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     "typechain-types/",
     "deployments/localhost/",
     ".next/",
+    ".vercel/",
+    ".vercel-ship",
   ];
   if (config.chain === "foundry") {
     // Installed on first `just compile` / `just deploy` via `forge install --no-git`
@@ -362,7 +365,7 @@ ${config.chain === "foundry" ? "- [Foundry](https://book.getfoundry.sh/getting-s
 \`scaffold-agent\` runs **\`npm install\`** in the repo root when you create the project (unless **\`SCAFFOLD_SKIP_NPM_INSTALL=1\`**). Then:
 
 \`\`\`bash
-${config.chain !== "none" ? "just chain        # start local blockchain (in a separate terminal)\njust fund         # 100 ETH each: local account #0 → DEPLOYER (+ AGENT if set)\njust deploy       # deploy contracts + generate ABI types (add e.g. \\`base\\` or \\`--network sepolia\\` for public chains)\njust verify       # verify AgentWallet on an explorer (default sepolia; e.g. \\`just verify base\\`)\n" : ""}just start        # start the app
+${config.chain !== "none" ? "just chain        # start local blockchain (in a separate terminal)\njust fund         # 100 ETH each: local account #0 → DEPLOYER (+ AGENT if set)\njust deploy       # deploy contracts + generate ABI types (add e.g. \\`base\\` or \\`--network sepolia\\` for public chains)\njust verify       # verify AgentWallet on an explorer (default sepolia; e.g. \\`just verify base\\`)\n" : ""}just start        # start the app${config.framework === "nextjs" || config.framework === "vite" ? "\njust ship         # deploy to Vercel (production)" : ""}
 \`\`\`
 
 If install was skipped or failed: \`npm install\` from the repo root.
@@ -372,7 +375,7 @@ ${config.chain !== "none" ? "\n**Local deploy:** **\`just generate\`** tries to 
 
 | Command | Description |
 |---|---|
-${config.chain !== "none" ? "| \`just chain\` | Start local blockchain |\n| \`just fund\` | Fund \`DEPLOYER_ADDRESS\`, \`AGENT_ADDRESS\`, and any swarm rows in \`packages/*/public/agents.json\` (100 ETH each from account #0) |\n| \`just deploy\` | Deploy contracts & auto-generate ABI types (optional: \`just deploy base\`, \`just deploy --network sepolia\`) |\n| \`just verify\` | Verify \`AgentWallet\` on an explorer (default network: sepolia; e.g. \`just verify base\`) |\n" : ""}${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just list-1claw\` | Print vault IDs + agent UUIDs from API (\`ONECLAW_API_KEY\`) |\n| \`just sync-1claw-env\` | List + write first vault + agent UUID into repo-root \`.env\` |\n| \`just reset\` | **Re-bootstrap 1Claw** — new vault + secrets + agent (see warning; use \`just reset -- --yes\` to skip confirm) |\n" : ""}| \`just env KEY VALUE\` | Upsert repo-root \`.env\` (e.g. **Reown** \`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID\`${config.framework === "vite" ? " or \`VITE_WALLETCONNECT_PROJECT_ID\`" : ""}) |\n| \`just enc KEY VALUE\` | Add/update a key in \`.env.secrets.encrypted\` (password prompt) |\n${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just vault PATH VALUE\` | Store a secret in your **1Claw vault** |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just reown PROJECT_ID\` | WalletConnect Cloud id → \`.env\` |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just register-agent\` | Register ERC-8004 agent on-chain (\`AGENT_PRIVATE_KEY\`; uses \`scaffold.config\` network) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just swarm agents=N\` | Add **N** swarm wallets (\`public/agents.json\` + \`SWARM_AGENT_KEYS_JSON\`; default \`agents=1\`) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just balances\` | Native balance on **all** networks in \`network-definitions\` (\`DEPLOYER_ADDRESS\` + agent; \`rpcOverrides\` from \`scaffold.config\`) |\n" : ""}| \`just start\` | Start the frontend / agent (may prompt for secrets password) |
+${config.chain !== "none" ? "| \`just chain\` | Start local blockchain |\n| \`just fund\` | Fund \`DEPLOYER_ADDRESS\`, \`AGENT_ADDRESS\`, and any swarm rows in \`packages/*/public/agents.json\` (100 ETH each from account #0) |\n| \`just deploy\` | Deploy contracts & auto-generate ABI types (optional: \`just deploy base\`, \`just deploy --network sepolia\`) |\n| \`just verify\` | Verify \`AgentWallet\` on an explorer (default network: sepolia; e.g. \`just verify base\`) |\n" : ""}${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just list-1claw\` | Print vault IDs + agent UUIDs from API (\`ONECLAW_API_KEY\`) |\n| \`just sync-1claw-env\` | List + write first vault + agent UUID into repo-root \`.env\` |\n| \`just reset\` | **Re-bootstrap 1Claw** — new vault + secrets + agent (see warning; use \`just reset -- --yes\` to skip confirm) |\n" : ""}| \`just env KEY VALUE\` | Upsert repo-root \`.env\` (e.g. **Reown** \`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID\`${config.framework === "vite" ? " or \`VITE_WALLETCONNECT_PROJECT_ID\`" : ""}) |\n| \`just enc KEY VALUE\` | Add/update a key in \`.env.secrets.encrypted\` (password prompt) |\n${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just vault PATH VALUE\` | Store a secret in your **1Claw vault** |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just reown PROJECT_ID\` | WalletConnect Cloud id → \`.env\` |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just register-agent\` | Register ERC-8004 agent on-chain (\`AGENT_PRIVATE_KEY\`; uses \`scaffold.config\` network) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just swarm agents=N\` | Add **N** swarm wallets (\`public/agents.json\` + \`SWARM_AGENT_KEYS_JSON\`; default \`agents=1\`) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just balances\` | Native balance on **all** networks in \`network-definitions\` (\`DEPLOYER_ADDRESS\` + agent; \`rpcOverrides\` from \`scaffold.config\`) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just ship\` | Deploy to **Vercel** (production); \`just ship name=my-name\` to choose name; \`just ship preview\` for preview deploy |\n" : ""}| \`just start\` | Start the frontend / agent (may prompt for secrets password) |
 | \`just accounts\` | QR codes for \`DEPLOYER_ADDRESS\` + agent (\`AGENT_ADDRESS\` / \`NEXT_PUBLIC_AGENT_ADDRESS\`; repo-root \`.env\`) |
 | \`just generate\` | Generate a deployer wallet (password prompt if \`.env.secrets.encrypted\` exists) |
 ${config.installAmpersendSdk ? "\n## Ampersend (x402 payments)\n\nSee **[\\`AMPERSEND.md\\`](./AMPERSEND.md)** — [docs](https://docs.ampersend.ai/), [npm](https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk), [GitHub](https://github.com/edgeandnode/ampersend-sdk).\n" : ""}
@@ -574,6 +577,10 @@ function writeJustfile(root: string, config: ScaffoldConfig) {
       "swarm agents='1':",
       "    node scripts/with-secrets.mjs -- node scripts/swarm-agents.mjs agents={{agents}}",
       "",
+      "# Deploy to Vercel (production by default); just ship   just ship name=my-custom-name   just ship preview",
+      "ship *ARGS:",
+      "    node scripts/ship.mjs {{ARGS}}",
+      "",
     );
   }
 
@@ -622,6 +629,7 @@ function writeScripts(root: string, config: ScaffoldConfig) {
     );
     file(scripts, "show-balances-all-chains.ts", getShowBalancesAllChainsScript());
     file(scripts, "swarm-agents.mjs", getSwarmAgentsScript());
+    file(scripts, "ship.mjs", getShipScript(config.projectName, config.framework));
   }
 
   // ── generate-abi-types.mjs ──────────────────────────────────────────────

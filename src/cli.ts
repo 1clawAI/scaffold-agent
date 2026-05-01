@@ -766,6 +766,11 @@ async function main() {
   } else {
     console.log(chalk.white("  just start           # start frontend"));
   }
+  if (framework === "nextjs" || framework === "vite") {
+    console.log(
+      chalk.white("  just ship            # deploy to Vercel (production)"),
+    );
+  }
   console.log(
     chalk.white("  just generate        # generate deployer wallet (if needed)"),
   );
