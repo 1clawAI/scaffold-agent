@@ -1889,7 +1889,7 @@ const SHIP_FILE = join(ROOT, ".vercel-ship");
 const VERCEL_DIR = join(PKG_DIR, ".vercel");
 
 function randomSuffix(len = 4) {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   const bytes = randomBytes(len);
   let out = "";
   for (let i = 0; i < len; i++) out += chars[bytes[i] % chars.length];
