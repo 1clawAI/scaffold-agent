@@ -50,12 +50,27 @@ import {
   wagmiConfigSource,
   web3ProvidersSource,
 } from "../scaffold-templates/wallet-context.js";
+import {
+  agentOnchainToolsModuleSource,
+  chatRouteAgentToolsStreamTextFragment,
+} from "../scaffold-templates/agent-onchain-tools.js";
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "0.0.14";
 
 /** 1Claw SDK version pinned for generated Next/Vite apps (vault reads in chat routes). */
 const ONECLAW_SDK_VERSION = "0.17.0";
+
+/** Scaffold UI monorepo packages — https://github.com/scaffold-eth/scaffold-ui */
+const SCAFFOLD_UI_HOOKS_VERSION = "0.1.8";
+const SCAFFOLD_UI_COMPONENTS_VERSION = "0.1.10";
+const SCAFFOLD_UI_DEBUG_CONTRACTS_VERSION = "0.1.9";
+
+/** Appended to chat system prompts where AI SDK `tools` are wired (Next `/api/chat`). */
+const CHAT_SYSTEM_TOOLS_SUFFIX =
+  " You have server tools (list_deployed_contracts, contract_read) for this repo's deployed contracts and RPC; prefer them over guessing addresses or ABIs.";
+const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
+  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit, those call 1Claw Intents (TEE signing; https://1claw.xyz/intents). Never submit high-value txs without explicit user confirmation.";
 
 /**
  * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
@@ -2087,95 +2102,23 @@ export default function Home() {
 `;
 }
 
-/** Next.js /debug — contract addresses + ABI summary (Scaffold-ETH 2–style). */
+/** Next.js /debug — [Scaffold UI](https://github.com/scaffold-eth/scaffold-ui) contract widgets + wagmi writes. */
 function debugPageContent(): string {
   return `"use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowLeft, Bug, Copy, Check, Fingerprint } from "lucide-react";
+import { ArrowLeft, Bug, Fingerprint } from "lucide-react";
+import type { Abi, Address } from "viem";
+import { Contract } from "@scaffold-ui/debug-contracts";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import deployedContracts from "@/contracts/deployedContracts";
+import { NETWORKS, type NetworkDefinition } from "@/lib/networks";
 
-type AbiItem = {
-  type?: string;
-  name?: string;
-  stateMutability?: string;
-  inputs?: { name?: string; type: string }[];
-};
-
-function formatInputs(inputs: { name?: string; type: string }[] | undefined) {
-  if (!inputs?.length) return "()";
-  return (
-    "(" +
-    inputs.map((i) => (i.name ? i.name + ": " : "") + i.type).join(", ") +
-    ")"
+function blockExplorerForChain(chainId: number): string | undefined {
+  const n = (Object.values(NETWORKS) as NetworkDefinition[]).find(
+    (x) => x.chainId === chainId,
   );
-}
-
-function AbiSummary({ abi }: { abi: readonly unknown[] }) {
-  const items = abi as AbiItem[];
-  const functions = items.filter((x) => x.type === "function");
-  const events = items.filter((x) => x.type === "event");
-  return (
-    <div className="space-y-4 text-sm">
-      {functions.length > 0 && (
-        <div>
-          <h4 className="font-medium text-foreground mb-2">Functions</h4>
-          <ul className="font-mono text-xs text-muted-foreground space-y-1">
-            {functions.map((f, i) => (
-              <li key={i}>
-                <span className="text-foreground">{f.name}</span>
-                {formatInputs(f.inputs)}
-                {f.stateMutability ? (
-                  <span className="text-muted-foreground/70">
-                    {" "}
-                    — {f.stateMutability}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {events.length > 0 && (
-        <div>
-          <h4 className="font-medium text-foreground mb-2">Events</h4>
-          <ul className="font-mono text-xs text-muted-foreground space-y-1">
-            {events.map((e, i) => (
-              <li key={i}>
-                <span className="text-foreground">{e.name}</span>
-                {formatInputs(e.inputs)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CopyBtn({ text }: { text: string }) {
-  const [ok, setOk] = useState(false);
-  return (
-    <button
-      type="button"
-      className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground"
-      title="Copy address"
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setOk(true);
-          setTimeout(() => setOk(false), 1500);
-        });
-      }}
-    >
-      {ok ? (
-        <Check className="h-3.5 w-3.5 text-green-500" />
-      ) : (
-        <Copy className="h-3.5 w-3.5" />
-      )}
-    </button>
-  );
+  return n?.blockExplorerUrl;
 }
 
 export default function DebugPage() {
@@ -2204,7 +2147,16 @@ export default function DebugPage() {
           <h1 className="text-sm font-semibold">Debug contracts</h1>
           <p className="text-xs text-muted-foreground">
             Deployed addresses &amp; ABI from{" "}
-            <code className="text-xs bg-muted px-1 rounded">deployedContracts.ts</code>
+            <code className="text-xs bg-muted px-1 rounded">deployedContracts.ts</code>{" "}
+            via{" "}
+            <a
+              href="https://github.com/scaffold-eth/scaffold-ui"
+              className="underline hover:text-foreground"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Scaffold UI
+            </a>
           </p>
         </div>
         <Link
@@ -2217,35 +2169,37 @@ export default function DebugPage() {
         <ConnectWalletButton />
       </header>
 
-      <main className="flex-1 p-6 max-w-3xl mx-auto w-full space-y-8">
+      <main className="flex-1 py-8 max-w-7xl mx-auto w-full space-y-10 px-4 lg:px-10">
         {entries.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground space-y-2">
             <p>No deployed contracts in <code className="bg-muted px-1 rounded">deployedContracts.ts</code> yet.</p>
             <p>Run: <code className="bg-muted px-1 rounded">just chain</code> → <code className="bg-muted px-1 rounded">just fund</code> → <code className="bg-muted px-1 rounded">just deploy</code></p>
           </div>
         ) : (
-          entries.map(([chainId, contracts]) => (
-            <section key={chainId} className="space-y-4">
-              <h2 className="text-lg font-semibold">Chain {chainId}</h2>
-              {Object.entries(contracts).map(([name, meta]) => (
-                <article
-                  key={name}
-                  className="rounded-lg border border-border bg-card p-5 space-y-3"
-                >
-                  <h3 className="font-mono text-base font-medium">{name}</h3>
-                  <div className="flex items-center gap-2 font-mono text-xs break-all bg-muted/50 rounded-md px-3 py-2">
-                    <span className="text-muted-foreground shrink-0">address</span>
-                    <span className="flex-1">{meta.address}</span>
-                    <CopyBtn text={meta.address} />
-                  </div>
-                  <AbiSummary abi={meta.abi} />
-                </article>
-              ))}
-            </section>
-          ))
+          entries.map(([chainIdStr, contracts]) => {
+            const chainId = Number(chainIdStr);
+            const explorer = blockExplorerForChain(chainId);
+            return (
+              <section key={chainIdStr} className="space-y-8">
+                <h2 className="text-lg font-semibold">Chain {chainIdStr}</h2>
+                {Object.entries(contracts).map(([name, meta]) => (
+                  <Contract
+                    key={name}
+                    contractName={name}
+                    contract={{
+                      address: meta.address as Address,
+                      abi: meta.abi as Abi,
+                    }}
+                    chainId={chainId}
+                    blockExplorerBaseUrl={explorer}
+                  />
+                ))}
+              </section>
+            );
+          })
         )}
         <p className="text-xs text-muted-foreground border-t border-border pt-6">
-          UI pattern inspired by{" "}
+          Inspired by{" "}
           <a
             href="https://github.com/scaffold-eth/scaffold-eth-2"
             className="underline hover:text-foreground"
@@ -2253,8 +2207,19 @@ export default function DebugPage() {
             rel="noreferrer"
           >
             Scaffold-ETH 2
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://github.com/scaffold-eth/scaffold-ui"
+            className="underline hover:text-foreground"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Scaffold UI
           </a>
-          . This page is read-only; use RainbowKit/wagmi hooks to send txs like the SE-2 Debug tab.
+          . The chat agent can use server tools (<code className="bg-muted px-1 rounded">list_deployed_contracts</code>,{" "}
+          <code className="bg-muted px-1 rounded">contract_read</code>
+          ) plus optional 1Claw Intents tools when configured.
         </p>
       </main>
     </div>
@@ -2285,7 +2250,7 @@ import {
   streamText,
   type CoreMessage,
 } from "ai";
-
+${chatRouteAgentToolsStreamTextFragment()}
 const shroudBaseURL =
   process.env.SHROUD_BASE_URL || "https://shroud.1claw.xyz/v1";
 
@@ -2316,8 +2281,11 @@ const billingMode =
   "${billingModeDefault}";
 
 /** Gemini: call Google API directly when a key is available (Shroud /chat/completions → Gemini is broken). */
-const CHAT_SYSTEM =
-  "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
+const CHAT_SYSTEM = ${JSON.stringify(
+    "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
+      CHAT_SYSTEM_TOOLS_SUFFIX +
+      CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW,
+  )};
 
 const STREAM_CHUNK =
   Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
@@ -2548,6 +2516,8 @@ export async function POST(req: Request) {
         model: google(geminiDirectModel),
         system: CHAT_SYSTEM,
         messages: convertToCoreMessages(messages),
+        tools: _agentOnchainTools,
+        maxSteps: 8,
         onError({ error }) {
           const msg = error instanceof Error ? error.message : String(error);
           if (
@@ -2647,7 +2617,7 @@ function nextApiRouteVaultThirdParty(llm: ThirdPartyLlm): string {
   return `import { convertToCoreMessages, streamText, type Message } from "ai";
 ${llmFactoryImport(llm)}
 import { createClient } from "@1claw/sdk";
-
+${chatRouteAgentToolsStreamTextFragment()}
 ${geminiModelBlock}const client = createClient({
   baseUrl: "https://api.1claw.xyz",
   apiKey: process.env.ONECLAW_API_KEY!,
@@ -2719,9 +2689,14 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: provider(${modelArg}),
-    system:
-      "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
+    system: ${JSON.stringify(
+      "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
+        CHAT_SYSTEM_TOOLS_SUFFIX +
+        CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW,
+    )},
     messages: convertToCoreMessages(messages),
+    tools: _agentOnchainTools,
+    maxSteps: 8,
     onError({ error }) {
       console.error("[api/chat] streamText error:", error);
     },
@@ -2745,7 +2720,7 @@ function nextApiRouteDirectThirdParty(llm: ThirdPartyLlm): string {
 
   return `import { convertToCoreMessages, streamText, type Message } from "ai";
 ${llmModelImport(llm)}
-${geminiModelBlock}
+${geminiModelBlock}${chatRouteAgentToolsStreamTextFragment()}
 export async function POST(req: Request) {
   let messages: Message[];
   try {
@@ -2766,9 +2741,14 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: ${modelExpr},
-    system:
-      "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.",
+    system: ${JSON.stringify(
+      "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
+        CHAT_SYSTEM_TOOLS_SUFFIX +
+        CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW,
+    )},
     messages: convertToCoreMessages(messages),
+    tools: _agentOnchainTools,
+    maxSteps: 8,
     onError({ error }) {
       console.error("[api/chat] streamText error:", error);
     },
@@ -2858,6 +2838,12 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
     "@tanstack/react-query": "^5.62.0",
     "@rainbow-me/rainbowkit": "^2.2.0",
     "burner-connector": "^0.0.20",
+    zod: "^3.24.0",
+    "@scaffold-ui/hooks": SCAFFOLD_UI_HOOKS_VERSION,
+    "@scaffold-ui/components": SCAFFOLD_UI_COMPONENTS_VERSION,
+    "@scaffold-ui/debug-contracts": SCAFFOLD_UI_DEBUG_CONTRACTS_VERSION,
+    "@heroicons/react": "^2.2.0",
+    "react-hot-toast": "^2.6.0",
   };
 
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
@@ -2932,7 +2918,10 @@ const nextConfig = {
     "agent0-sdk",
     "@rainbow-me/rainbowkit",
     "wagmi",
-    "@tanstack/react-query"${config.installAmpersendSdk ? ',\n    "@ampersend_ai/ampersend-sdk"' : ""}
+    "@tanstack/react-query",
+    "@scaffold-ui/hooks",
+    "@scaffold-ui/components",
+    "@scaffold-ui/debug-contracts"${config.installAmpersendSdk ? ',\n    "@ampersend_ai/ampersend-sdk"' : ""}
   ],
   // agent0-sdk references Node builtins (e.g. fs) for IPFS; browser registration uses wallet + on-chain paths only.
   webpack: (config, { isServer, webpack: webpackApi }) => {
@@ -3039,6 +3028,13 @@ module.exports = nextConfig;
   file(pkg, "postcss.config.mjs", POSTCSS_CONFIG);
   file(pkg, "components.json", COMPONENTS_JSON);
   file(pkg, "lib/utils.ts", UTILS_TS);
+  file(
+    pkg,
+    "lib/agent-onchain-tools.ts",
+    agentOnchainToolsModuleSource(
+      config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
+    ),
+  );
   file(pkg, "lib/agent-swarm.tsx", agentSwarmContextSource("next"));
   file(pkg, "lib/networks.ts", nextNetworksReexportSource());
   file(pkg, "lib/burner-auto-connect.tsx", burnerAutoConnectSource());

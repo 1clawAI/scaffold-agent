@@ -76,7 +76,7 @@ Defaults under **`-y`** (see **`--help`**): e.g. Foundry, Next.js, 1Claw Shroud,
 
 ### Pinned versions (generated Next/Vite)
 
-In **`src/actions/scaffold.ts`**: **`AMPERSEND_SDK_VERSION`** (`@ampersend_ai/ampersend-sdk`, when Ampersend is enabled) and **`ONECLAW_SDK_VERSION`** (`@1claw/sdk`, when secrets or LLM is 1Claw). Bump those constants when releasing against new SDK lines; then **`npm run build`**.
+In **`src/actions/scaffold.ts`**: **`AMPERSEND_SDK_VERSION`** (`@ampersend_ai/ampersend-sdk`, when Ampersend is enabled), **`ONECLAW_SDK_VERSION`** (`@1claw/sdk`, when secrets or LLM is 1Claw), and **`SCAFFOLD_UI_*`** (`@scaffold-ui/hooks` / `components` / `debug-contracts` on Next.js). Bump those constants when releasing against new SDK/UI lines; then **`npm run build`**.
 
 ## Editing templates
 
