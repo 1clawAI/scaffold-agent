@@ -229,7 +229,7 @@ export function getActiveNetwork(): NetworkDefinition {
 }
 
 /** Re-export for wallet config (burner wallet, etc.). */
-export { targetNetwork, type TargetNetwork } from "./scaffold.config";
+export { targetNetwork, rpcOverrides, type TargetNetwork } from "./scaffold.config";
 `;
 }
 

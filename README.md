@@ -101,6 +101,7 @@ my-agent/
 │   ├── generate-abi-types.mjs    # auto-gen TypeScript from contract ABIs
 │   ├── generate-deployer.mjs     # create deployer wallet if missing (+ auto-fund if RPC up)
 │   ├── fund-deployer.mjs         # fund deployer + agents (incl. swarm roster in public/agents.json)
+│   ├── check-network.mjs         # validate targetNetwork has deployed contracts
 │   └── swarm-agents.mjs          # just swarm — append wallets (Next/Vite)
 ├── packages/
 │   ├── foundry/                  # or hardhat/ (Solidity contracts)
@@ -131,7 +132,9 @@ my-agent/
 | `just chain`            | Start local blockchain (Foundry/Hardhat)                                                 |
 | `just fund`             | Fund `DEPLOYER_ADDRESS`, `AGENT_ADDRESS`, and swarm addresses in `packages/*/public/agents.json` (100 ETH each from account #0) |
 | `just deploy`           | Deploy contracts & auto-gen ABIs (prompts for secrets password if encrypted)             |
-| `just start`            | Start frontend or agent (same)                                                           |
+| `just start`            | Start frontend or agent (runs `check-network` first as a warning)                        |
+| `just check-network`    | Validate `targetNetwork` chainId has contracts in `deployedContracts.ts`                  |
+| `just use-network KEY`  | Switch `targetNetwork` in `scaffold.config.ts` and run check (keys: ethereum, base, sepolia, baseSepolia, polygon, bnb, localhost) |
 | `just accounts`         | Show QR codes for `DEPLOYER_ADDRESS` + agent address (repo-root `.env`)                  |
 | `just balances`         | Native balance on all chains in `network-definitions` (deployer + agent; `rpcOverrides`) |
 | `just generate`         | Generate deployer wallet (password prompt if encrypted)                                  |
@@ -149,6 +152,28 @@ my-agent/
 type-safe contract addresses and ABIs in your frontend code.
 
 **Next.js apps** also get **`/debug`** (bug icon in the header): read-only view of deployed addresses and ABI, similar to [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2) Debug Contracts.
+
+### Unified network model
+
+Generated projects use a single source of truth for the active EVM network:
+
+- **`scaffold.config.ts`** defines **`targetNetwork`** (e.g. `"localhost"`, `"base"`, `"sepolia"`) and optional **`rpcOverrides`**.
+- **`getActiveNetwork()`** resolves the full `NetworkDefinition` (chainId, RPC, block explorer) with overrides applied.
+- **AI agent tools** (`lib/agent-onchain-tools.ts`) default `chainId` and `chain` parameters to the active network — the model doesn't need to guess.
+- **`just check-network`** validates that `deployedContracts.ts` has entries for `targetNetwork`'s chainId.
+- **`just use-network <key>`** rewrites `targetNetwork` and runs the check in one step.
+- **`just start`** runs `check-network` as a precheck (warns if contracts are missing, but doesn't block the dev server).
+
+### Agent on-chain tools
+
+Next.js and Vite projects include **`lib/agent-onchain-tools.ts`** — preset [Vercel AI SDK](https://sdk.vercel.ai/) `tool`s wired into the chat route:
+
+- **`list_deployed_contracts`** — enumerate addresses from `deployedContracts.ts` (hints active chain).
+- **`contract_read`** — call any view/pure function via RPC using the deployed ABI (defaults to active network).
+- **`oneclaw_intent_simulate`** — simulate a transaction via [1Claw Intents](https://1claw.xyz/intents) + Tenderly (when 1Claw SDK is included).
+- **`oneclaw_intent_submit`** — submit a signed transaction intent to 1Claw's TEE (keys never in the model).
+
+The 1Claw intent tools default the `chain` parameter to the active network's 1Claw slug via a built-in `ONECLAW_CHAIN_NAMES` mapping.
 
 ### Route loading & frontend performance
 
@@ -239,7 +264,11 @@ Optional: **`npm publish --provenance --tag latest`** if you use [npm provenance
 
 This project builds on ideas and tooling from the Ethereum builder community:
 
-- **[Scaffold-ETH 2](https://scaffoldeth.io)** / **[scaffold-eth/scaffold-eth-2](https://github.com/scaffold-eth/scaffold-eth-2)** — monorepo patterns, RainbowKit/wagmi/viem stack, and UX inspiration for onchain apps.
+- **[Scaffold-ETH 2](https://scaffoldeth.io)** / **[scaffold-eth/scaffold-eth-2](https://github.com/scaffold-eth/scaffold-eth-2)** — monorepo patterns, RainbowKit/wagmi/viem stack, ABI-generated contract types, Debug Contracts UI, and UX inspiration for onchain apps.
+- **[Scaffold UI](https://github.com/scaffold-eth/scaffold-ui)** — React component library from the Scaffold-ETH team; generated Next.js projects use:
+  - [`@scaffold-ui/hooks`](https://www.npmjs.com/package/@scaffold-ui/hooks) — `useScaffoldReadContract`, `useScaffoldWriteContract`, and other typed contract hooks.
+  - [`@scaffold-ui/components`](https://www.npmjs.com/package/@scaffold-ui/components) — `Address`, `AddressInput`, `Balance`, `EtherInput`, and other Ethereum-aware display components.
+  - [`@scaffold-ui/debug-contracts`](https://www.npmjs.com/package/@scaffold-ui/debug-contracts) — `<Contract>` widget powering the `/debug` page (read/write any deployed ABI).
 - **[BuidlGuidl](https://BuidlGuidl.com)** — education and builder tooling for the ecosystem.
 - **Burner wallet** — local dev wallet UX via **[burner-connector](https://github.com/scaffold-eth/burner-connector)** (Scaffold-ETH / BuidlGuidl–style), used when the generated app targets **localhost**.
 

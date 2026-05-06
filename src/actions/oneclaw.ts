@@ -138,14 +138,22 @@ async function storeSecret(
 async function registerAgent(
   token: string,
   name: string,
+  options?: { intentsApiEnabled?: boolean; shroudEnabled?: boolean },
 ): Promise<{ id: string; apiKey: string }> {
+  const body: Record<string, unknown> = { name };
+  if (options?.intentsApiEnabled === true) {
+    body.intents_api_enabled = true;
+  }
+  if (options?.shroudEnabled === true) {
+    body.shroud_enabled = true;
+  }
   const res = await fetch(`${BASE_URL}/v1/agents`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -169,6 +177,10 @@ export async function setupOneClaw(
      * still register a 1Claw API agent so ONECLAW_AGENT_ID + key are returned.
      */
     registerShroudAgent?: boolean;
+    /** POST /v1/agents `intents_api_enabled` — https://1claw.xyz/intents */
+    intentsApiEnabled?: boolean;
+    /** POST /v1/agents `shroud_enabled` — enable Shroud LLM proxy for this agent */
+    shroudEnabled?: boolean;
   },
 ): Promise<OneClawResult> {
   const token = await getToken(apiKey);
@@ -178,11 +190,20 @@ export async function setupOneClaw(
 
   let agentInfo: { id: string; apiKey: string } | undefined;
 
+  const intents = options?.intentsApiEnabled === true;
+  const shroud = options?.shroudEnabled === true;
+
   if (agentPrivateKey) {
     await storeSecret(token, vaultId, "private-keys/agent", agentPrivateKey);
-    agentInfo = await registerAgent(token, `${projectName}-agent`);
+    agentInfo = await registerAgent(token, `${projectName}-agent`, {
+      intentsApiEnabled: intents,
+      shroudEnabled: shroud,
+    });
   } else if (options?.registerShroudAgent) {
-    agentInfo = await registerAgent(token, `${projectName}-shroud`);
+    agentInfo = await registerAgent(token, `${projectName}-shroud`, {
+      intentsApiEnabled: intents,
+      shroudEnabled: shroud,
+    });
   }
 
   if (options?.llmApiKey?.trim()) {

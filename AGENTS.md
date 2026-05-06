@@ -30,6 +30,7 @@ Use **`-y`** / **`--non-interactive`** so no stdin prompts run (CI, scripts, oth
 
 - **Required** when default **`--secrets`** is **`oneclaw`**: **`--env-password`** (≥ 6 chars), unless you set **`--secrets none`**.
 - **`--defer-oneclaw-api-key`**: omit **`ONECLAW_API_KEY`** at scaffold time (vault not created until key exists).
+- **`--oneclaw-intents`**: with **`-y`**, register the 1Claw API agent with **Intents** enabled ([1claw.xyz/intents](https://1claw.xyz/intents)); interactive runs ask when vault setup creates an agent.
 - **`--skip-npm-install`** / **`--skip-auto-fund`**: avoid install and fund script in automation.
 
 Minimal example (creates `./my-app` in current directory):
@@ -90,6 +91,35 @@ Generated apps embed large template literals (e.g. Next **`app/api/chat/route.ts
 ## Generated repos: `just reset` (1Claw)
 
 When **`secrets`** or **`llm`** is 1Claw, scaffolds include **`just reset`** to create a **new** vault + agent after install if initial setup hit limits. It prints a **backup warning** — see the generated **`README.md`** and **`scripts/reset-1claw-setup.mjs`**.
+
+## Unified network model (generated repos)
+
+`scaffold.config.ts` → **`targetNetwork`** is the single source of truth for the active EVM network across UI, API routes, and AI agent tools.
+
+- **`getActiveNetwork()`** (from `network-definitions.ts`) resolves `targetNetwork` to a `NetworkDefinition` with `rpcOverrides` applied.
+- **Agent on-chain tools** (`lib/agent-onchain-tools.ts`) default `chainId` and `chain` parameters to `getActiveNetwork()`, so the AI model doesn't need to guess the chain.
+- **`rpcOverrides`** (in `scaffold.config.ts`) are applied in both `getActiveNetwork()` and the agent tools helper `networkForChainId()` — any chain gets its RPC override, not just the active one.
+- **`ONECLAW_CHAIN_NAMES`** maps `chainId` → 1Claw slug (e.g. `8453 → "base"`); intent tools default to the active network's slug.
+
+### Network commands
+
+| Command | Description |
+|---|---|
+| `just check-network` | Validate `targetNetwork` chainId exists in `deployedContracts.ts` |
+| `just use-network <key>` | Rewrite `targetNetwork` in `scaffold.config.ts` and run check |
+| `just start` | Runs `check-network` as a precheck (warns but does not block) |
+
+Valid keys: `ethereum`, `base`, `sepolia`, `baseSepolia`, `polygon`, `bnb`, `localhost`.
+
+### Implementation (this CLI)
+
+| File | Change |
+|---|---|
+| `src/scaffold-templates/agent-onchain-tools.ts` | `getActiveNetwork` default, `rpcOverrides`-aware `networkForChainId`, `ONECLAW_CHAIN_NAMES` |
+| `src/scaffold-templates/network-config.ts` | Re-exports `rpcOverrides` from `scaffold.config` |
+| `src/actions/project-scripts.ts` | `getCheckNetworkScript()` |
+| `src/actions/scaffold.ts` | `check-network` script, `use-network` / `check-network` justfile recipes, start precheck |
+| `src/actions/oneclaw.ts` | `shroud_enabled` in `registerAgent` body |
 
 ## Further reading
 

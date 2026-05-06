@@ -83,15 +83,18 @@ async function resolveValue(arg) {
 }
 
 async function promptNewPasswordTwice() {
-  const p1 = await promptSecretsPassword("New secrets password: ");
-  const p2 = await promptSecretsPassword("Confirm secrets password: ");
-  if (p1 !== p2) {
-    throw new Error("Passwords do not match");
+  for (;;) {
+    const p1 = await promptSecretsPassword("New secrets password: ");
+    const p2 = await promptSecretsPassword("Confirm secrets password: ");
+    if (p1 !== p2) {
+      console.error("Passwords do not match. Please try again.\n");
+      continue;
+    }
+    if (!p1) {
+      throw new Error("Password cannot be empty");
+    }
+    return p1;
   }
-  if (!p1) {
-    throw new Error("Password cannot be empty");
-  }
-  return p1;
 }
 
 async function getToken(apiKey) {

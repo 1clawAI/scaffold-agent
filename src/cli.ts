@@ -98,6 +98,8 @@ Shroud (only when --llm oneclaw):
   --shroud-provider-api-key   Upstream API key for provider_api_key mode (vault or .env)
   --oneclaw-agent-id <uuid>   Required with -y when --secrets is not oneclaw and --llm oneclaw
   --oneclaw-agent-api-key     Agent ocv_ key (same conditions)
+  --oneclaw-intents           With -y: register the 1Claw API agent with Intents enabled (TEE txs;
+                              https://1claw.xyz/intents). Interactive: prompted when vault creates an agent.
 
 Chain & UI:
   --chain <framework>         foundry | hardhat | none
@@ -293,8 +295,15 @@ async function main() {
     process.exit(1);
   }
 
-  const { projectName, secrets, generateAgent, installAmpersendSdk, llm, swarmEntries } =
-    w;
+  const {
+    projectName,
+    secrets,
+    generateAgent,
+    installAmpersendSdk,
+    llm,
+    swarmEntries,
+    oneclawIntentsEnabled,
+  } = w;
   let {
     shroudUpstream,
     shroudBillingMode,
@@ -445,6 +454,8 @@ async function main() {
         {
           llmApiKey: thirdPartyLlmApiKey,
           registerShroudAgent: llm === "oneclaw",
+          intentsApiEnabled: oneclawIntentsEnabled,
+          shroudEnabled: llm === "oneclaw",
           shroudProviderApiKey:
             shroudProviderKeyForVault && shroudVaultPath
               ? { path: shroudVaultPath, value: shroudProviderKeyForVault }
@@ -460,6 +471,11 @@ async function main() {
         if (llm === "oneclaw") {
           info(
             "This UUID is your ONECLAW_AGENT_ID for Shroud — not the same as AGENT_ADDRESS (Ethereum wallet below).",
+          );
+        }
+        if (oneclawIntentsEnabled) {
+          info(
+            "1Claw Intents is enabled for this agent — https://1claw.xyz/intents (set allowlists and caps in the dashboard).",
           );
         }
       }
@@ -501,6 +517,7 @@ async function main() {
     shroudUpstream,
     shroudBillingMode,
     oneClawVaultId: vaultId,
+    oneclawIntentsEnabled,
     agentConfigExtra: w.agentFileExtras?.extra,
   };
 

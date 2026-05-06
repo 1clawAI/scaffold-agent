@@ -28,6 +28,29 @@ function llmVendorLabel(llm: Exclude<LlmProvider, "oneclaw">): string {
   }
 }
 
+/**
+ * Interactive secrets password + confirmation; re-prompts until both match.
+ */
+export async function promptEnvPasswordWithConfirmation(): Promise<string> {
+  for (;;) {
+    const pw = await password({
+      message:
+        "Set a password to encrypt secrets (API keys & private keys → .env.secrets.encrypted):",
+      mask: "*",
+      validate: (val) => {
+        if (val.length < 6) return "Password must be at least 6 characters";
+        return true;
+      },
+    });
+    const confirmPw = await password({
+      message: "Confirm password:",
+      mask: "*",
+    });
+    if (pw === confirmPw) return pw;
+    console.warn("Passwords do not match. Please try again.\n");
+  }
+}
+
 export async function promptProjectName(): Promise<string> {
   return input({
     message: "Project name:",
@@ -87,27 +110,31 @@ export async function promptSecrets(): Promise<SecretsConfig> {
   }
 
   if (mode === "oneclaw" || mode === "encrypted") {
-    config.envPassword = await password({
-      message:
-        "Set a password to encrypt secrets (API keys & private keys → .env.secrets.encrypted):",
-      mask: "*",
-      validate: (val) => {
-        if (val.length < 6) return "Password must be at least 6 characters";
-        return true;
-      },
-    });
-
-    const confirmPw = await password({
-      message: "Confirm password:",
-      mask: "*",
-    });
-
-    if (config.envPassword !== confirmPw) {
-      throw new Error("Passwords do not match. Please run again.");
-    }
+    config.envPassword = await promptEnvPasswordWithConfirmation();
   }
 
   return config;
+}
+
+/**
+ * Offer [1Claw Intents](https://1claw.xyz/intents) when an API agent is created during vault setup.
+ */
+export async function promptOneclawIntents(): Promise<boolean> {
+  return select<boolean>({
+    message: "Enable 1Claw Intents for this API agent?",
+    choices: [
+      {
+        value: true,
+        name: "Yes — TEE transaction signing via Intents API",
+        description:
+          "Chat can use oneclaw_intent_* tools without the agent private key in the model. Configure allowlists and caps on 1claw.xyz (Intents availability depends on your 1Claw plan).",
+      },
+      {
+        value: false,
+        name: "No — Intents off for this agent (enable later in the dashboard)",
+      },
+    ],
+  });
 }
 
 export async function promptIdentity(useOneClaw: boolean): Promise<boolean> {

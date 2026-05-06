@@ -50,6 +50,7 @@ const OPTION_KEY_TO_CLI: Record<string, keyof CliFlagValues> = {
   "llm-api-key": "llm-api-key",
   "oneclaw-agent-id": "oneclaw-agent-id",
   "oneclaw-agent-api-key": "oneclaw-agent-api-key",
+  "oneclaw-intents": "oneclaw-intents",
   chain: "chain",
   framework: "framework",
   "skip-npm-install": "skip-npm-install",
@@ -81,7 +82,8 @@ function pickCliValue(key: keyof CliFlagValues, v: unknown): CliFlagValues[keyof
     key === "defer-oneclaw-api-key" ||
     key === "skip-npm-install" ||
     key === "skip-auto-fund" ||
-    key === "non-interactive"
+    key === "non-interactive" ||
+    key === "oneclaw-intents"
   ) {
     const b = asBool(v);
     return b as CliFlagValues[typeof key] | undefined;

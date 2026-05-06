@@ -14,6 +14,8 @@ import {
   promptChain,
   promptFramework,
   promptProjectName,
+  promptEnvPasswordWithConfirmation,
+  promptOneclawIntents,
 } from "./prompts.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
 import type {
@@ -61,6 +63,8 @@ export type GatheredWizard = {
   /** Wallets to generate when generateAgent (ids + optional presets). */
   swarmEntries: SwarmPlanEntry[];
   agentFileExtras: AgentFileExtras | null;
+  /** POST /v1/agents `intents_api_enabled` when vault setup registers an agent. */
+  oneclawIntentsEnabled: boolean;
 };
 
 function niErr(msg: string): never {
@@ -103,20 +107,7 @@ async function secretsFromFlagsInteractive(v: CliFlagValues): Promise<SecretsCon
       }
       config.envPassword = v["env-password"];
     } else {
-      config.envPassword = await password({
-        message:
-          "Set a password to encrypt secrets (API keys & private keys → .env.secrets.encrypted):",
-        mask: "*",
-        validate: (val) =>
-          val.length < 6 ? "Password must be at least 6 characters" : true,
-      });
-      const confirmPw = await password({
-        message: "Confirm password:",
-        mask: "*",
-      });
-      if (config.envPassword !== confirmPw) {
-        throw new Error("Passwords do not match. Please run again.");
-      }
+      config.envPassword = await promptEnvPasswordWithConfirmation();
     }
   }
 
@@ -344,6 +335,24 @@ export async function gatherWizardInputs(
     framework = await promptFramework();
   }
 
+  const oneclawAgentWillRegister =
+    secrets.mode === "oneclaw" &&
+    Boolean(secrets.apiKey?.trim()) &&
+    (generateAgent || llm === "oneclaw");
+
+  let oneclawIntentsEnabled = false;
+  if (oneclawAgentWillRegister) {
+    if (nonInteractive) {
+      oneclawIntentsEnabled = v["oneclaw-intents"] === true;
+    } else if (v["oneclaw-intents"] === true) {
+      oneclawIntentsEnabled = true;
+    } else if (v["oneclaw-intents"] === false) {
+      oneclawIntentsEnabled = false;
+    } else {
+      oneclawIntentsEnabled = await promptOneclawIntents();
+    }
+  }
+
   return {
     projectName,
     secrets,
@@ -362,5 +371,6 @@ export async function gatherWizardInputs(
     skipAutoFund,
     swarmEntries,
     agentFileExtras: extras,
+    oneclawIntentsEnabled,
   };
 }

@@ -24,6 +24,25 @@ function getOneclawAgentClient() {
 `
     : "";
 
+  const oneclawChainMapBlock = includeOneclawSdk
+    ? `
+const ONECLAW_CHAIN_NAMES: Record<number, string> = {
+  1: "ethereum",
+  8453: "base",
+  11155111: "sepolia",
+  84532: "base-sepolia",
+  137: "polygon",
+  56: "bnb",
+  31337: "localhost",
+};
+
+function oneclawChainForActive(): string {
+  const active = getActiveNetwork();
+  return ONECLAW_CHAIN_NAMES[active.chainId] || "ethereum";
+}
+`
+    : "";
+
   const oneclawToolsBlock = includeOneclawSdk
     ? `,
     oneclaw_intent_simulate: tool({
@@ -32,7 +51,8 @@ function getOneclawAgentClient() {
       parameters: z.object({
         chain: z
           .string()
-          .describe("1Claw chain name, e.g. base, sepolia, ethereum (see 1Claw docs)"),
+          .optional()
+          .describe("1Claw chain name, e.g. base, sepolia, ethereum. Defaults to active network."),
         to: z.string().regex(/^0x[a-fA-F0-9]{40}$/i),
         valueEther: z
           .string()
@@ -52,9 +72,10 @@ function getOneclawAgentClient() {
               "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY — cannot call Intents API.",
           };
         }
+        const resolvedChain = chain || oneclawChainForActive();
         const valueWei = parseEther(valueEther || "0").toString();
         const res = await client.agents.simulateTransaction(agentId, {
-          chain,
+          chain: resolvedChain,
           to,
           value: valueWei,
           data: data || "0x",
@@ -69,7 +90,10 @@ function getOneclawAgentClient() {
       description:
         "Submit a transaction intent to 1Claw — signing and optional broadcast happen in the TEE (keys never in the model). Requires ONECLAW_AGENT_ID, ONECLAW_AGENT_API_KEY, and intents_api_enabled on the agent. See https://1claw.xyz/intents",
       parameters: z.object({
-        chain: z.string(),
+        chain: z
+          .string()
+          .optional()
+          .describe("1Claw chain name. Defaults to active network."),
         to: z.string().regex(/^0x[a-fA-F0-9]{40}$/i),
         valueEther: z.string().describe("ETH value as a decimal string, e.g. 0 or 0.05"),
         data: z
@@ -87,11 +111,12 @@ function getOneclawAgentClient() {
               "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY — cannot call Intents API.",
           };
         }
+        const resolvedChain = chain || oneclawChainForActive();
         const valueWei = parseEther(valueEther || "0").toString();
         const res = await client.agents.submitTransaction(
           agentId,
           {
-            chain,
+            chain: resolvedChain,
             to,
             value: valueWei,
             data: data || "0x",
@@ -116,12 +141,17 @@ import {
   type Address,
 } from "viem";
 import deployedContracts from "@/contracts/deployedContracts";
-import { NETWORKS, type NetworkDefinition } from "@/lib/networks";
+import { getActiveNetwork, NETWORKS, rpcOverrides, type NetworkDefinition } from "@/lib/networks";
 import { viemChainForNetwork } from "@repo/viem-chain";
 ${oneclawImport}
 function networkForChainId(chainId: number): NetworkDefinition | null {
   for (const n of Object.values(NETWORKS) as NetworkDefinition[]) {
-    if (n.chainId === chainId) return n;
+    if (n.chainId === chainId) {
+      const byChain = rpcOverrides[String(n.chainId)];
+      const byKey = rpcOverrides[n.key];
+      const override = byChain || byKey;
+      return override?.trim() ? { ...n, rpcUrl: override.trim() } : n;
+    }
   }
   return null;
 }
@@ -139,7 +169,7 @@ function getContractMeta(chainId: number, contractName: string) {
   }
   return { meta: { address: meta.address as Address, abi: meta.abi } };
 }
-${oneclawClientFn}
+${oneclawClientFn}${oneclawChainMapBlock}
 /**
  * Preset tools for the chat route: read deployed ABIs and eth_call via viem.${
     includeOneclawSdk
@@ -148,6 +178,8 @@ ${oneclawClientFn}
   }
  */
 export function buildAgentOnchainTools() {
+  const active = getActiveNetwork();
+
   return {
     list_deployed_contracts: tool({
       description:
@@ -171,14 +203,14 @@ export function buildAgentOnchainTools() {
             })),
           });
         }
-        return out;
+        return { activeChainId: active.chainId, activeNetwork: active.key, deployments: out };
       },
     }),
     contract_read: tool({
       description:
-        "Call a read-only (view/pure) contract function via RPC using the deployed ABI from deployedContracts.ts.",
+        "Call a read-only (view/pure) contract function via RPC using the deployed ABI from deployedContracts.ts. chainId defaults to the active network.",
       parameters: z.object({
-        chainId: z.number().describe("EVM chain id, e.g. 31337, 11155111, 8453"),
+        chainId: z.number().optional().describe("EVM chain id, e.g. 31337, 11155111, 8453. Defaults to active network."),
         contractName: z.string().describe("Contract key in deployedContracts, e.g. YourContract"),
         functionName: z.string(),
         argsJson: z
@@ -187,12 +219,13 @@ export function buildAgentOnchainTools() {
           .describe('JSON array of arguments, e.g. [] or ["0xabc..."]'),
       }),
       execute: async ({ chainId, contractName, functionName, argsJson }) => {
-        const got = getContractMeta(chainId, contractName);
+        const resolvedChainId = chainId ?? active.chainId;
+        const got = getContractMeta(resolvedChainId, contractName);
         if ("error" in got) return { error: got.error };
-        const net = networkForChainId(chainId);
+        const net = networkForChainId(resolvedChainId);
         if (!net) {
           return {
-            error: \`chainId \${chainId} is not in scaffold NETWORKS — add it or switch targetNetwork.\`,
+            error: \`chainId \${resolvedChainId} is not in scaffold NETWORKS — add it or switch targetNetwork.\`,
           };
         }
         let args: readonly unknown[] = [];

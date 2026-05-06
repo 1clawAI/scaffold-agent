@@ -69,6 +69,11 @@ export interface ScaffoldConfig {
   /** Set when llm === "oneclaw" — Token Billing vs own key in vault / .env */
   shroudBillingMode?: ShroudBillingMode;
   oneClawVaultId?: string;
+  /**
+   * When true, the 1Claw API agent created during `setupOneClaw` was registered with
+   * `intents_api_enabled` (TEE signing — https://1claw.xyz/intents). Reflected in README only.
+   */
+  oneclawIntentsEnabled?: boolean;
   /** Opaque blob from `agent.json` `extra` (passed to templates / future use). */
   agentConfigExtra?: unknown;
 }

@@ -58,6 +58,8 @@ export type CliFlagValues = {
   "llm-api-key"?: string;
   "oneclaw-agent-id"?: string;
   "oneclaw-agent-api-key"?: string;
+  /** Enable Intents on the 1Claw API agent created during vault setup (with -y). */
+  "oneclaw-intents"?: boolean;
   chain?: string;
   framework?: string;
   "skip-npm-install"?: boolean;
@@ -134,6 +136,7 @@ export function parseScaffoldArgv(argv: string[]): ParsedScaffoldArgv {
       "llm-api-key": { type: "string" },
       "oneclaw-agent-id": { type: "string" },
       "oneclaw-agent-api-key": { type: "string" },
+      "oneclaw-intents": { type: "boolean" },
       chain: { type: "string" },
       framework: { type: "string" },
       "skip-npm-install": { type: "boolean" },
