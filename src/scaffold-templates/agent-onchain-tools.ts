@@ -4,7 +4,11 @@
  */
 
 /** True when generated app includes `@1claw/sdk` (1Claw LLM and/or vault secrets). */
-export function agentOnchainToolsModuleSource(includeOneclawSdk: boolean): string {
+export function agentOnchainToolsModuleSource(includeOneclawSdk: boolean, includeAmpersend: boolean = false): string {
+  const ampersendImport = includeAmpersend
+    ? `import { getPaymentFetch } from "@/lib/ampersend-client";
+`
+    : "";
   const oneclawImport = includeOneclawSdk
     ? `import { createClient } from "@1claw/sdk";
 `
@@ -131,6 +135,61 @@ function oneclawChainForActive(): string {
     })`
     : "";
 
+  const ampersendToolsBlock = includeAmpersend
+    ? `,
+    x402_paid_fetch: tool({
+      description:
+        "Fetch a URL that requires x402 payment. Automatically handles the 402 Payment Required flow: signs a USDC payment via the Ampersend wallet and retries the request. Use for any API behind an x402 paywall (e.g. https://httpay.xyz/api/market-mood). Requires AMPERSEND_SIGNING_KEY.",
+      parameters: z.object({
+        url: z.string().url().describe("The full URL to fetch (must be HTTPS)"),
+        method: z
+          .enum(["GET", "POST", "PUT", "DELETE"])
+          .optional()
+          .describe("HTTP method. Defaults to GET."),
+        body: z
+          .string()
+          .optional()
+          .describe("Request body as JSON string (for POST/PUT)"),
+        headers: z
+          .record(z.string())
+          .optional()
+          .describe("Extra headers to include"),
+      }),
+      execute: async ({ url, method, body, headers }) => {
+        try {
+          const payFetch = getPaymentFetch();
+          const init: RequestInit = { method: method || "GET" };
+          if (body) {
+            init.body = body;
+            init.headers = { "Content-Type": "application/json", ...headers };
+          } else if (headers) {
+            init.headers = headers;
+          }
+          const res = await payFetch(url, init);
+          const contentType = res.headers.get("content-type") || "";
+          const text = await res.text();
+          if (!res.ok) {
+            return {
+              error: \`HTTP \${res.status} \${res.statusText}\`,
+              body: text.slice(0, 4000),
+            };
+          }
+          if (contentType.includes("application/json")) {
+            try {
+              return { status: res.status, data: JSON.parse(text) };
+            } catch {
+              return { status: res.status, data: text.slice(0, 4000) };
+            }
+          }
+          return { status: res.status, data: text.slice(0, 4000) };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { error: msg };
+        }
+      },
+    })`
+    : "";
+
   return `import { tool } from "ai";
 import { z } from "zod";
 import {
@@ -143,7 +202,7 @@ import {
 import deployedContracts from "@/contracts/deployedContracts";
 import { getActiveNetwork, NETWORKS, rpcOverrides, type NetworkDefinition } from "@/lib/networks";
 import { viemChainForNetwork } from "@repo/viem-chain";
-${oneclawImport}
+${oneclawImport}${ampersendImport}
 function networkForChainId(chainId: number): NetworkDefinition | null {
   for (const n of Object.values(NETWORKS) as NetworkDefinition[]) {
     if (n.chainId === chainId) {
@@ -257,7 +316,7 @@ export function buildAgentOnchainTools() {
           return { error: msg };
         }
       },
-    })${oneclawToolsBlock},
+    })${oneclawToolsBlock}${ampersendToolsBlock},
   };
 }
 `;

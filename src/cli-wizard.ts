@@ -5,6 +5,7 @@ import {
   promptIdentity,
   promptInstallAmpersendSdk,
   promptAmpersendSigningKey,
+  promptAmpersendAgentCredentials,
   promptLlmProvider,
   promptThirdPartyLlmApiKey,
   promptShroudUpstreamProvider,
@@ -52,6 +53,8 @@ export type GatheredWizard = {
   installAmpersendSdk: boolean;
   /** Ampersend signing key from ampersend.ai (vault or encrypted .env). */
   ampersendSigningKey: string | undefined;
+  /** Ampersend smart account address (AMPERSEND_SMART_ACCOUNT_ADDRESS). */
+  ampersendSmartAccountAddress: string | undefined;
   llm: LlmProvider;
   shroudUpstream: ShroudUpstreamProvider | undefined;
   shroudBillingMode: ShroudBillingMode | undefined;
@@ -207,19 +210,26 @@ export async function gatherWizardInputs(
   }
 
   let ampersendSigningKey: string | undefined;
+  let ampersendSmartAccountAddress: string | undefined;
   if (installAmpersendSdk) {
     if (nonInteractive) {
       const k = v["ampersend-signing-key"];
       ampersendSigningKey = k !== undefined && k !== "" ? k : undefined;
+      const sa = v["ampersend-smart-account"];
+      ampersendSmartAccountAddress = sa !== undefined && sa !== "" ? sa : undefined;
     } else if (
       v["ampersend-signing-key"] !== undefined &&
       v["ampersend-signing-key"] !== ""
     ) {
       ampersendSigningKey = v["ampersend-signing-key"];
+      const sa = v["ampersend-smart-account"];
+      ampersendSmartAccountAddress = sa !== undefined && sa !== "" ? sa : undefined;
     } else {
-      ampersendSigningKey = await promptAmpersendSigningKey(
-        secrets.mode === "oneclaw",
-      );
+      const creds = await promptAmpersendAgentCredentials();
+      if (creds) {
+        ampersendSigningKey = creds.sessionKeyPrivateKey;
+        ampersendSmartAccountAddress = creds.smartAccountAddress;
+      }
     }
   }
 
@@ -379,6 +389,7 @@ export async function gatherWizardInputs(
     generateAgent,
     installAmpersendSdk,
     ampersendSigningKey,
+    ampersendSmartAccountAddress,
     llm,
     shroudUpstream,
     shroudBillingMode,

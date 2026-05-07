@@ -53,6 +53,8 @@ export type CliFlagValues = {
   ampersend?: string;
   /** Ampersend signing key (from ampersend.ai) — stored in vault or encrypted .env. */
   "ampersend-signing-key"?: string;
+  /** Ampersend smart account address (from ampersend.ai). */
+  "ampersend-smart-account"?: string;
   llm?: string;
   "shroud-upstream"?: string;
   "shroud-billing"?: string;
@@ -132,6 +134,7 @@ export function parseScaffoldArgv(argv: string[]): ParsedScaffoldArgv {
       agent: { type: "string" },
       ampersend: { type: "string" },
       "ampersend-signing-key": { type: "string" },
+      "ampersend-smart-account": { type: "string" },
       llm: { type: "string" },
       "shroud-upstream": { type: "string" },
       "shroud-billing": { type: "string" },

@@ -59,6 +59,9 @@ import { ampersendClientSource } from "../scaffold-templates/ampersend-client.js
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "0.0.14";
+/** x402 packages — transitive deps of ampersend-sdk but listed explicitly for the payment fetch flow. */
+const X402_FETCH_VERSION = "^2.11.0";
+const X402_CORE_VERSION = "^2.11.0";
 
 /** 1Claw SDK version pinned for generated Next/Vite apps (vault reads in chat routes). */
 const ONECLAW_SDK_VERSION = "0.17.0";
@@ -73,6 +76,8 @@ const CHAT_SYSTEM_TOOLS_SUFFIX =
   " You have server tools (list_deployed_contracts, contract_read) for this repo's deployed contracts and RPC; prefer them over guessing addresses or ABIs.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
   " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit, those call 1Claw Intents (TEE signing; https://1claw.xyz/intents). Never submit high-value txs without explicit user confirmation.";
+const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
+  " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
 
 /**
  * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
@@ -109,18 +114,31 @@ function ampersendReadmeMarkdown(config: ScaffoldConfig): string {
     const libPath =
       config.framework === "nextjs" ? "lib/ampersend-client.ts" : "src/lib/ampersend-client.ts";
     lines.push(
-      `The \`@ampersend_ai/ampersend-sdk\` dependency (${AMPERSEND_SDK_VERSION}) is in \`packages/${pkgDir}/package.json\`.`,
+      `The \`@ampersend_ai/ampersend-sdk\` dependency (${AMPERSEND_SDK_VERSION}) + \`@x402/fetch\` + \`@x402/core\` are in \`packages/${pkgDir}/package.json\`.`,
       "",
       `A pre-configured helper is generated at \`packages/${pkgDir}/${libPath}\`:`,
       "",
       "```typescript",
-      'import { getAmpersendWallet, getAmpersendTreasurer } from "@/lib/ampersend-client";',
+      'import { getAmpersendTreasurer, getPaymentFetch } from "@/lib/ampersend-client";',
       "",
-      "const wallet = getAmpersendWallet(); // uses AMPERSEND_SIGNING_KEY from env",
-      "const treasurer = getAmpersendTreasurer(); // NaiveTreasurer (dev/testing)",
+      "// AmpersendTreasurer — authorizes x402 payments via the Ampersend API",
+      "const treasurer = getAmpersendTreasurer();",
+      "",
+      "// Fetch wrapper that auto-handles 402 Payment Required responses",
+      "const payFetch = getPaymentFetch();",
+      "const res = await payFetch('https://httpay.xyz/api/market-mood');",
       "```",
       "",
-      "The signing key is read from `AMPERSEND_SIGNING_KEY` (stored in 1Claw vault at `private-keys/ampersend-signing`, or in `.env.secrets.encrypted`).",
+      "## Environment variables",
+      "",
+      "| Variable | Required | Description |",
+      "| --- | --- | --- |",
+      "| `AMPERSEND_SIGNING_KEY` | Yes | Private key from ampersend.ai (0x…) |",
+      "| `AMPERSEND_SMART_ACCOUNT_ADDRESS` | Recommended | Smart account address from ampersend.ai (enables smart account mode) |",
+      "| `AMPERSEND_CHAIN_ID` | No | Chain ID for payments (default: `8453` = Base mainnet) |",
+      "| `X402_NETWORKS` | No | Comma-separated networks (default: `base,base-sepolia`) |",
+      "",
+      "The AI agent has an `x402_paid_fetch` tool that uses `getPaymentFetch()` to call APIs behind x402 paywalls automatically.",
     );
   } else {
     lines.push(
@@ -266,6 +284,8 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     rootDevDeps["dotenv"] = "^16.4.0";
     if (config.installAmpersendSdk) {
       rootDevDeps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
+      rootDevDeps["@x402/fetch"] = X402_FETCH_VERSION;
+      rootDevDeps["@x402/core"] = X402_CORE_VERSION;
     }
   }
 
@@ -2291,15 +2311,15 @@ export default function DebugPage() {
 function nextApiRouteOneClawShroud(
   upstream: ShroudUpstreamProvider,
   billingModeDefault: ShroudBillingMode,
+  installAmpersendSdk?: boolean,
 ): string {
   const modelFallback = shroudDefaultModel(upstream);
+  const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
   return `import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import {
   convertToCoreMessages,
-  createDataStreamResponse,
-  formatDataStreamPart,
   streamText,
-  type CoreMessage,
 } from "ai";
 ${chatRouteAgentToolsStreamTextFragment()}
 const shroudBaseURL =
@@ -2335,11 +2355,9 @@ const billingMode =
 const CHAT_SYSTEM = ${JSON.stringify(
     "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
       CHAT_SYSTEM_TOOLS_SUFFIX +
-      CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW,
+      CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
+      x402Suffix,
   )};
-
-const STREAM_CHUNK =
-  Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
 
 /** Canonical 8-4-4-4-12 hex (any version/variant 1Claw may return). */
 const ONECLAW_UUID_RE =
@@ -2419,31 +2437,6 @@ function validateShroudEnv():
   return { ok: true, agentId, agentKey };
 }
 
-function coreContentToText(content: CoreMessage["content"]): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("");
-}
-
-function buildShroudOpenAIMessages(core: CoreMessage[]): Array<{
-  role: "system" | "user" | "assistant";
-  content: string;
-}> {
-  const out: Array<{
-    role: "system" | "user" | "assistant";
-    content: string;
-  }> = [{ role: "system", content: CHAT_SYSTEM }];
-  for (const m of core) {
-    if (m.role === "system") continue;
-    if (m.role === "user" || m.role === "assistant") {
-      out.push({ role: m.role, content: coreContentToText(m.content) });
-    }
-  }
-  return out;
-}
-
 async function readVaultSecretPlaintext(vaultId, secretPath, agentId, agentApiKey) {
   const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
     /\\/$/,
@@ -2498,39 +2491,6 @@ function gemini503() {
     }),
     { status: 503, headers: { "Content-Type": "application/json" } },
   );
-}
-
-async function shroudChatCompletionNonStream(
-  openaiMessages: Array<{ role: string; content: string }>,
-  shroudHeaders: Record<string, string>,
-): Promise<{ ok: true; text: string } | { ok: false; status: number; body: string }> {
-  const base = shroudBaseURL.replace(/\\/$/, "");
-  const url = base + "/chat/completions";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...shroudHeaders,
-    },
-    body: JSON.stringify({
-      model: defaultModel,
-      messages: openaiMessages,
-    }),
-  });
-  const raw = await res.text();
-  if (!res.ok) {
-    return { ok: false, status: res.status, body: raw };
-  }
-  try {
-    const data = JSON.parse(raw) as {
-      choices?: Array<{ message?: { content?: string | null } }>;
-    };
-    const c = data.choices?.[0]?.message?.content;
-    const text = typeof c === "string" ? c : c == null ? "" : String(c);
-    return { ok: true, text };
-  } catch {
-    return { ok: false, status: 502, body: "Invalid JSON from Shroud" };
-  }
 }
 
 export async function POST(req: Request) {
@@ -2606,55 +2566,30 @@ export async function POST(req: Request) {
     }
   }
 
-  const openaiMessages = buildShroudOpenAIMessages(
-    convertToCoreMessages(messages),
-  );
+  const shroud = createOpenAI({
+    baseURL: shroudBaseURL.replace(/\\/$/, ""),
+    apiKey: "shroud",
+    headers: shroudHeaders,
+  });
 
-  return createDataStreamResponse({
-    async execute(dataStream) {
-      const r = await shroudChatCompletionNonStream(
-        openaiMessages,
-        shroudHeaders,
-      );
-      if (!r.ok) {
-        let msg = r.body;
-        try {
-          const j = JSON.parse(r.body) as { error?: { message?: string } };
-          if (j?.error?.message) msg = j.error.message;
-        } catch {
-          /* keep raw */
-        }
-        throw new Error(
-          "Shroud " +
-            r.status +
-            ": " +
-            msg.slice(0, 2000) +
-            (r.body.length > 2000 ? "…" : ""),
-        );
-      }
-      const text = r.text;
-      for (let i = 0; i < text.length; i += STREAM_CHUNK) {
-        dataStream.write(
-          formatDataStreamPart("text", text.slice(i, i + STREAM_CHUNK)),
-        );
-      }
-      dataStream.write(
-        formatDataStreamPart("finish_message", {
-          finishReason: "stop",
-          usage: undefined,
-        }),
-      );
-    },
-    onError(error) {
+  const result = streamText({
+    model: shroud(defaultModel),
+    system: CHAT_SYSTEM,
+    messages: convertToCoreMessages(messages),
+    tools: _agentOnchainTools,
+    maxSteps: 8,
+    onError({ error }) {
       console.error("[api/chat] Shroud stream error:", error);
-      return error instanceof Error ? error.message : String(error);
     },
   });
+
+  return result.toDataStreamResponse();
 }
 `;
 }
 
-function nextApiRouteVaultThirdParty(llm: ThirdPartyLlm): string {
+function nextApiRouteVaultThirdParty(llm: ThirdPartyLlm, installAmpersendSdk?: boolean): string {
+  const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
   const geminiModelBlock =
     llm === "gemini"
       ? `const geminiModelId =
@@ -2743,7 +2678,8 @@ export async function POST(req: Request) {
     system: ${JSON.stringify(
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
         CHAT_SYSTEM_TOOLS_SUFFIX +
-        CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW,
+        CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
+        x402Suffix,
     )},
     messages: convertToCoreMessages(messages),
     tools: _agentOnchainTools,
@@ -2758,7 +2694,8 @@ export async function POST(req: Request) {
 `;
 }
 
-function nextApiRouteDirectThirdParty(llm: ThirdPartyLlm): string {
+function nextApiRouteDirectThirdParty(llm: ThirdPartyLlm, installAmpersendSdk?: boolean): string {
+  const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
   const geminiModelBlock =
     llm === "gemini"
       ? `const geminiModelId =
@@ -2795,7 +2732,8 @@ export async function POST(req: Request) {
     system: ${JSON.stringify(
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
         CHAT_SYSTEM_TOOLS_SUFFIX +
-        CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW,
+        CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
+        x402Suffix,
     )},
     messages: convertToCoreMessages(messages),
     tools: _agentOnchainTools,
@@ -2815,17 +2753,19 @@ function nextApiRoute(
   secretsMode: SecretsMode,
   shroudUpstream?: ShroudUpstreamProvider,
   shroudBillingMode?: ShroudBillingMode,
+  installAmpersendSdk?: boolean,
 ): string {
   if (llm === "oneclaw") {
     return nextApiRouteOneClawShroud(
       shroudUpstream ?? "openai",
       shroudBillingMode ?? "token_billing",
+      installAmpersendSdk,
     );
   }
   if (useVaultForSecrets(secretsMode)) {
-    return nextApiRouteVaultThirdParty(llm);
+    return nextApiRouteVaultThirdParty(llm, installAmpersendSdk);
   }
-  return nextApiRouteDirectThirdParty(llm);
+  return nextApiRouteDirectThirdParty(llm, installAmpersendSdk);
 }
 
 /** Public roster for `fetch("/agents.json")` (no private keys). */
@@ -2905,6 +2845,8 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   }
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
+    deps["@x402/fetch"] = X402_FETCH_VERSION;
+    deps["@x402/core"] = X402_CORE_VERSION;
   }
 
   file(
@@ -3084,6 +3026,7 @@ module.exports = nextConfig;
     "lib/agent-onchain-tools.ts",
     agentOnchainToolsModuleSource(
       config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
+      config.installAmpersendSdk,
     ),
   );
   if (config.installAmpersendSdk) {
@@ -3228,6 +3171,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       config.secrets.mode,
       config.shroudUpstream,
       config.shroudBillingMode,
+      config.installAmpersendSdk,
     ),
   );
 
@@ -3249,16 +3193,16 @@ export default deployedContracts;
 function viteApiRouteOneClawShroud(
   upstream: ShroudUpstreamProvider,
   billingModeDefault: ShroudBillingMode,
+  installAmpersendSdk?: boolean,
 ): string {
+  const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
   const modelFallback = shroudDefaultModel(upstream);
   return `import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import express from "express";
 import {
   convertToCoreMessages,
-  pipeDataStreamToResponse,
-  formatDataStreamPart,
   streamText,
-  type CoreMessage,
 } from "ai";
 import "dotenv/config";
 import { createPublicClient, http, formatUnits, erc20Abi } from "viem";
@@ -3292,11 +3236,12 @@ const billingMode =
   (process.env.SHROUD_BILLING_MODE as "token_billing" | "provider_api_key") ||
   "${billingModeDefault}";
 
-const CHAT_SYSTEM =
-  "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets.";
-
-const STREAM_CHUNK =
-  Math.max(8, Number(process.env.SHROUD_STREAM_CHUNK_CHARS || "40") || 40);
+const CHAT_SYSTEM = ${JSON.stringify(
+    "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
+      CHAT_SYSTEM_TOOLS_SUFFIX +
+      CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
+      x402Suffix,
+  )};
 
 const ONECLAW_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -3363,31 +3308,6 @@ function validateShroudEnvExpress(res) {
   return { agentId, agentKey };
 }
 
-function coreContentToText(content: CoreMessage["content"]): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("");
-}
-
-function buildShroudOpenAIMessages(core: CoreMessage[]): Array<{
-  role: "system" | "user" | "assistant";
-  content: string;
-}> {
-  const out: Array<{
-    role: "system" | "user" | "assistant";
-    content: string;
-  }> = [{ role: "system", content: CHAT_SYSTEM }];
-  for (const m of core) {
-    if (m.role === "system") continue;
-    if (m.role === "user" || m.role === "assistant") {
-      out.push({ role: m.role, content: coreContentToText(m.content) });
-    }
-  }
-  return out;
-}
-
 async function readVaultSecretPlaintext(vaultId, secretPath, agentId, agentApiKey) {
   const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
     /\\/$/,
@@ -3439,39 +3359,6 @@ function sendGemini503(res) {
     error:
       "SHROUD_BILLING_MODE=provider_api_key needs a Google API key for the optional direct Gemini path. Set SHROUD_PROVIDER_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY, or vault api-keys/google with ONECLAW_VAULT_ID. For token billing only, use SHROUD_BILLING_MODE=token_billing so chat calls Shroud without a Google key in this app.",
   });
-}
-
-async function shroudChatCompletionNonStream(
-  openaiMessages: Array<{ role: string; content: string }>,
-  shroudHeaders: Record<string, string>,
-): Promise<{ ok: true; text: string } | { ok: false; status: number; body: string }> {
-  const base = shroudBaseURL.replace(/\\/$/, "");
-  const url = base + "/chat/completions";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...shroudHeaders,
-    },
-    body: JSON.stringify({
-      model: defaultModel,
-      messages: openaiMessages,
-    }),
-  });
-  const raw = await res.text();
-  if (!res.ok) {
-    return { ok: false, status: res.status, body: raw };
-  }
-  try {
-    const data = JSON.parse(raw) as {
-      choices?: Array<{ message?: { content?: string | null } }>;
-    };
-    const c = data.choices?.[0]?.message?.content;
-    const text = typeof c === "string" ? c : c == null ? "" : String(c);
-    return { ok: true, text };
-  } catch {
-    return { ok: false, status: 502, body: "Invalid JSON from Shroud" };
-  }
 }
 
 const app = express();
@@ -3538,57 +3425,31 @@ app.post("/api/chat", async (req, res) => {
     }
   }
 
-  const openaiMessages = buildShroudOpenAIMessages(
-    convertToCoreMessages(messages),
-  );
+  const shroud = createOpenAI({
+    baseURL: shroudBaseURL.replace(/\\/$/, ""),
+    apiKey: "shroud",
+    headers: shroudHeaders,
+  });
 
-  pipeDataStreamToResponse(res, {
-    async execute(dataStream) {
-      const r = await shroudChatCompletionNonStream(
-        openaiMessages,
-        shroudHeaders,
-      );
-      if (!r.ok) {
-        let msg = r.body;
-        try {
-          const j = JSON.parse(r.body) as { error?: { message?: string } };
-          if (j?.error?.message) msg = j.error.message;
-        } catch {
-          /* keep raw */
-        }
-        throw new Error(
-          "Shroud " +
-            r.status +
-            ": " +
-            msg.slice(0, 2000) +
-            (r.body.length > 2000 ? "…" : ""),
-        );
-      }
-      const text = r.text;
-      for (let i = 0; i < text.length; i += STREAM_CHUNK) {
-        dataStream.write(
-          formatDataStreamPart("text", text.slice(i, i + STREAM_CHUNK)),
-        );
-      }
-      dataStream.write(
-        formatDataStreamPart("finish_message", {
-          finishReason: "stop",
-          usage: undefined,
-        }),
-      );
-    },
-    onError(error) {
+  const result = streamText({
+    model: shroud(defaultModel),
+    system: CHAT_SYSTEM,
+    messages: convertToCoreMessages(messages),
+    tools: _agentOnchainTools,
+    maxSteps: 8,
+    onError({ error }) {
       console.error("[api/chat] Shroud stream error:", error);
-      return error instanceof Error ? error.message : String(error);
     },
   });
+
+  result.pipeDataStreamToResponse(res);
 });
 ${viteAgent0AndBalancesExpressBlock()}
 app.listen(3001, () => console.log("API server on http://localhost:3001"));
 `;
 }
 
-function viteApiRouteVaultThirdParty(llm: ThirdPartyLlm): string {
+function viteApiRouteVaultThirdParty(llm: ThirdPartyLlm, _installAmpersendSdk?: boolean): string {
   const geminiModelBlock =
     llm === "gemini"
       ? `const geminiModelId =
@@ -3684,7 +3545,7 @@ app.listen(3001, () => console.log("API server on http://localhost:3001"));
 `;
 }
 
-function viteApiRouteDirectThirdParty(llm: ThirdPartyLlm): string {
+function viteApiRouteDirectThirdParty(llm: ThirdPartyLlm, _installAmpersendSdk?: boolean): string {
   const envKey = llmEnvKey(llm);
   const geminiModelBlock =
     llm === "gemini"
@@ -3736,17 +3597,19 @@ function viteApiRoute(
   secretsMode: SecretsMode,
   shroudUpstream?: ShroudUpstreamProvider,
   shroudBillingMode?: ShroudBillingMode,
+  installAmpersendSdk?: boolean,
 ): string {
   if (llm === "oneclaw") {
     return viteApiRouteOneClawShroud(
       shroudUpstream ?? "openai",
       shroudBillingMode ?? "token_billing",
+      installAmpersendSdk,
     );
   }
   if (useVaultForSecrets(secretsMode)) {
-    return viteApiRouteVaultThirdParty(llm);
+    return viteApiRouteVaultThirdParty(llm, installAmpersendSdk);
   }
-  return viteApiRouteDirectThirdParty(llm);
+  return viteApiRouteDirectThirdParty(llm, installAmpersendSdk);
 }
 
 function scaffoldVite(root: string, config: ScaffoldConfig) {
@@ -3783,6 +3646,8 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
   }
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
+    deps["@x402/fetch"] = X402_FETCH_VERSION;
+    deps["@x402/core"] = X402_CORE_VERSION;
   }
 
   file(
@@ -4005,6 +3870,7 @@ createRoot(document.getElementById("root")!).render(
       config.secrets.mode,
       config.shroudUpstream,
       config.shroudBillingMode,
+      config.installAmpersendSdk,
     ),
   );
 

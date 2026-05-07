@@ -302,6 +302,7 @@ async function main() {
     generateAgent,
     installAmpersendSdk,
     ampersendSigningKey,
+    ampersendSmartAccountAddress,
     llm,
     swarmEntries,
     oneclawIntentsEnabled,
@@ -345,6 +346,11 @@ async function main() {
           ? "Add your Ampersend signing key later: just vault private-keys/ampersend-signing '<key>'"
           : "Add AMPERSEND_SIGNING_KEY later: just enc AMPERSEND_SIGNING_KEY '<key>'",
       );
+    }
+    if (ampersendSmartAccountAddress) {
+      success(`Smart account address: ${ampersendSmartAccountAddress}`);
+    } else {
+      info("Add AMPERSEND_SMART_ACCOUNT_ADDRESS later in .env for x402 smart account payments");
     }
   }
 
@@ -608,6 +614,9 @@ async function main() {
 
   if (ampersendSigningKey) {
     envVars["AMPERSEND_SIGNING_KEY"] = ampersendSigningKey;
+  }
+  if (ampersendSmartAccountAddress) {
+    envVars["AMPERSEND_SMART_ACCOUNT_ADDRESS"] = ampersendSmartAccountAddress;
   }
 
   const shouldEncrypt =
