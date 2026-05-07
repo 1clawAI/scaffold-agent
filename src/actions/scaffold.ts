@@ -55,6 +55,7 @@ import {
   agentOnchainToolsModuleSource,
   chatRouteAgentToolsStreamTextFragment,
 } from "../scaffold-templates/agent-onchain-tools.js";
+import { ampersendClientSource } from "../scaffold-templates/ampersend-client.js";
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "0.0.14";
@@ -105,8 +106,21 @@ function ampersendReadmeMarkdown(config: ScaffoldConfig): string {
   ];
   if (config.framework === "nextjs" || config.framework === "vite") {
     const pkgDir = config.framework === "nextjs" ? "nextjs" : "vite";
+    const libPath =
+      config.framework === "nextjs" ? "lib/ampersend-client.ts" : "src/lib/ampersend-client.ts";
     lines.push(
-      `The \`@ampersend_ai/ampersend-sdk\` dependency (${AMPERSEND_SDK_VERSION}) is in \`packages/${pkgDir}/package.json\`. Import it in API routes or server code per the [SDK docs](https://docs.ampersend.ai/).`,
+      `The \`@ampersend_ai/ampersend-sdk\` dependency (${AMPERSEND_SDK_VERSION}) is in \`packages/${pkgDir}/package.json\`.`,
+      "",
+      `A pre-configured helper is generated at \`packages/${pkgDir}/${libPath}\`:`,
+      "",
+      "```typescript",
+      'import { getAmpersendWallet, getAmpersendTreasurer } from "@/lib/ampersend-client";',
+      "",
+      "const wallet = getAmpersendWallet(); // uses AMPERSEND_SIGNING_KEY from env",
+      "const treasurer = getAmpersendTreasurer(); // NaiveTreasurer (dev/testing)",
+      "```",
+      "",
+      "The signing key is read from `AMPERSEND_SIGNING_KEY` (stored in 1Claw vault at `private-keys/ampersend-signing`, or in `.env.secrets.encrypted`).",
     );
   } else {
     lines.push(
@@ -3072,6 +3086,9 @@ module.exports = nextConfig;
       config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
     ),
   );
+  if (config.installAmpersendSdk) {
+    file(pkg, "lib/ampersend-client.ts", ampersendClientSource());
+  }
   file(pkg, "lib/agent-swarm.tsx", agentSwarmContextSource("next"));
   file(pkg, "lib/networks.ts", nextNetworksReexportSource());
   file(pkg, "lib/burner-auto-connect.tsx", burnerAutoConnectSource());
@@ -3887,6 +3904,9 @@ interface ImportMeta {
 
   file(pkg, "src/lib/utils.ts", UTILS_TS);
   file(pkg, "src/lib/networks.ts", viteNetworksReexportSource());
+  if (config.installAmpersendSdk) {
+    file(pkg, "src/lib/ampersend-client.ts", ampersendClientSource());
+  }
   file(pkg, "src/lib/burner-auto-connect.tsx", burnerAutoConnectSource());
   file(pkg, "src/lib/agent-swarm.tsx", agentSwarmContextSource("vite"));
   file(pkg, "src/lib/wagmi-config.ts", wagmiConfigSource(config.projectName, "vite"));
