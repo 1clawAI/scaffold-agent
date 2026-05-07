@@ -169,6 +169,43 @@ export async function promptInstallAmpersendSdk(): Promise<boolean> {
 }
 
 /**
+ * Prompt for Ampersend signing key (from ampersend.ai setup).
+ * Stored in 1Claw vault or encrypted .env.
+ */
+export async function promptAmpersendSigningKey(
+  useOneClaw: boolean,
+): Promise<string | undefined> {
+  const storageHint = useOneClaw
+    ? "stored in 1Claw vault at private-keys/ampersend-signing"
+    : "saved in .env.secrets.encrypted as AMPERSEND_SIGNING_KEY";
+  const when = await select<"now" | "later">({
+    message: `Add your Ampersend signing key now? (${storageHint})`,
+    choices: [
+      {
+        value: "now" as const,
+        name: "Enter now (from ampersend.ai)",
+      },
+      {
+        value: "later" as const,
+        name: "Add later",
+      },
+    ],
+  });
+  if (when !== "now") return undefined;
+
+  return password({
+    message: "Ampersend signing key (private key from ampersend.ai, 0x...):",
+    mask: "*",
+    validate: (val) => {
+      if (!isValidPrivateKey(val)) {
+        return "Must be a 32-byte hex private key (0x + 64 hex chars)";
+      }
+      return true;
+    },
+  });
+}
+
+/**
  * After `ampersend setup start` / approval / `setup finish` — smart account + session key.
  * Returns undefined if user defers.
  */

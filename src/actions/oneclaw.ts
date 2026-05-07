@@ -181,6 +181,8 @@ export async function setupOneClaw(
     intentsApiEnabled?: boolean;
     /** POST /v1/agents `shroud_enabled` — enable Shroud LLM proxy for this agent */
     shroudEnabled?: boolean;
+    /** Ampersend signing key from ampersend.ai — stored at private-keys/ampersend-signing */
+    ampersendSigningKey?: string;
   },
 ): Promise<OneClawResult> {
   const token = await getToken(apiKey);
@@ -223,6 +225,16 @@ export async function setupOneClaw(
       options.shroudProviderApiKey.path,
       options.shroudProviderApiKey.value.trim(),
       "api_key",
+    );
+  }
+
+  if (options?.ampersendSigningKey?.trim()) {
+    await storeSecret(
+      token,
+      vaultId,
+      "private-keys/ampersend-signing",
+      options.ampersendSigningKey.trim(),
+      "private_key",
     );
   }
 

@@ -4,6 +4,7 @@ import {
   promptSecrets,
   promptIdentity,
   promptInstallAmpersendSdk,
+  promptAmpersendSigningKey,
   promptLlmProvider,
   promptThirdPartyLlmApiKey,
   promptShroudUpstreamProvider,
@@ -49,6 +50,8 @@ export type GatheredWizard = {
   secrets: SecretsConfig;
   generateAgent: boolean;
   installAmpersendSdk: boolean;
+  /** Ampersend signing key from ampersend.ai (vault or encrypted .env). */
+  ampersendSigningKey: string | undefined;
   llm: LlmProvider;
   shroudUpstream: ShroudUpstreamProvider | undefined;
   shroudBillingMode: ShroudBillingMode | undefined;
@@ -201,6 +204,23 @@ export async function gatherWizardInputs(
     installAmpersendSdk = parseAmpersendFlag(v.ampersend, false);
   } else {
     installAmpersendSdk = await promptInstallAmpersendSdk();
+  }
+
+  let ampersendSigningKey: string | undefined;
+  if (installAmpersendSdk) {
+    if (nonInteractive) {
+      const k = v["ampersend-signing-key"];
+      ampersendSigningKey = k !== undefined && k !== "" ? k : undefined;
+    } else if (
+      v["ampersend-signing-key"] !== undefined &&
+      v["ampersend-signing-key"] !== ""
+    ) {
+      ampersendSigningKey = v["ampersend-signing-key"];
+    } else {
+      ampersendSigningKey = await promptAmpersendSigningKey(
+        secrets.mode === "oneclaw",
+      );
+    }
   }
 
   let llm: LlmProvider;
@@ -358,6 +378,7 @@ export async function gatherWizardInputs(
     secrets,
     generateAgent,
     installAmpersendSdk,
+    ampersendSigningKey,
     llm,
     shroudUpstream,
     shroudBillingMode,

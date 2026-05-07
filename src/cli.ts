@@ -83,6 +83,7 @@ Agent & extras:
   --agent <choice>            generate | none  (default with -y: generate)
   --swarm <n>                 Generate N agent wallets (1–64); primary stays AGENT_ADDRESS
   --ampersend <choice>        yes | no        (default with -y: no)
+  --ampersend-signing-key     Ampersend signing key from ampersend.ai (stored in vault or encrypted .env)
   --from-config <file>        Merge options from agent.json (CLI flags override file)
   --dump-config               Print agent.json to stdout (merged flags + optional --from-config;
                               secret flags omitted; fills unset fields with -y defaults)
@@ -300,6 +301,7 @@ async function main() {
     secrets,
     generateAgent,
     installAmpersendSdk,
+    ampersendSigningKey,
     llm,
     swarmEntries,
     oneclawIntentsEnabled,
@@ -331,6 +333,19 @@ async function main() {
     info("Docs:     https://docs.ampersend.ai/");
     info("npm:      https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk");
     info("GitHub:   https://github.com/edgeandnode/ampersend-sdk");
+    if (ampersendSigningKey) {
+      success(
+        secrets.mode === "oneclaw"
+          ? "Signing key will be stored in 1Claw vault (private-keys/ampersend-signing)"
+          : "Signing key will be stored in .env.secrets.encrypted (AMPERSEND_SIGNING_KEY)",
+      );
+    } else {
+      info(
+        secrets.mode === "oneclaw"
+          ? "Add your Ampersend signing key later: just vault private-keys/ampersend-signing '<key>'"
+          : "Add AMPERSEND_SIGNING_KEY later: just enc AMPERSEND_SIGNING_KEY '<key>'",
+      );
+    }
   }
 
   section("LLM Provider");
@@ -456,6 +471,7 @@ async function main() {
           registerShroudAgent: llm === "oneclaw",
           intentsApiEnabled: oneclawIntentsEnabled,
           shroudEnabled: llm === "oneclaw",
+          ampersendSigningKey,
           shroudProviderApiKey:
             shroudProviderKeyForVault && shroudVaultPath
               ? { path: shroudVaultPath, value: shroudProviderKeyForVault }
@@ -588,6 +604,10 @@ async function main() {
       shroudBillingMode === "provider_api_key" && secrets.mode !== "oneclaw"
         ? shroudProviderKeyForEnv || ""
         : "";
+  }
+
+  if (ampersendSigningKey) {
+    envVars["AMPERSEND_SIGNING_KEY"] = ampersendSigningKey;
   }
 
   const shouldEncrypt =
