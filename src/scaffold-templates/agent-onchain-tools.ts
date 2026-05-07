@@ -157,7 +157,7 @@ function oneclawChainForActive(): string {
       }),
       execute: async ({ url, method, body, headers }) => {
         try {
-          const payFetch = getPaymentFetch();
+          const payFetch = await getPaymentFetch();
           const init: RequestInit = { method: method || "GET" };
           if (body) {
             init.body = body;

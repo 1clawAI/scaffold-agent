@@ -3030,7 +3030,9 @@ module.exports = nextConfig;
     ),
   );
   if (config.installAmpersendSdk) {
-    file(pkg, "lib/ampersend-client.ts", ampersendClientSource());
+    file(pkg, "lib/ampersend-client.ts", ampersendClientSource(
+      config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
+    ));
   }
   file(pkg, "lib/agent-swarm.tsx", agentSwarmContextSource("next"));
   file(pkg, "lib/networks.ts", nextNetworksReexportSource());
@@ -3770,7 +3772,9 @@ interface ImportMeta {
   file(pkg, "src/lib/utils.ts", UTILS_TS);
   file(pkg, "src/lib/networks.ts", viteNetworksReexportSource());
   if (config.installAmpersendSdk) {
-    file(pkg, "src/lib/ampersend-client.ts", ampersendClientSource());
+    file(pkg, "src/lib/ampersend-client.ts", ampersendClientSource(
+      config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
+    ));
   }
   file(pkg, "src/lib/burner-auto-connect.tsx", burnerAutoConnectSource());
   file(pkg, "src/lib/agent-swarm.tsx", agentSwarmContextSource("vite"));
