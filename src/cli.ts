@@ -160,14 +160,14 @@ function defaultShroudModel(upstream: ShroudUpstreamProvider): string {
     case "openai":
       return "gpt-4o";
     case "anthropic":
-      return "claude-sonnet-4-20250514";
+      return "claude-sonnet-4-6-20250217";
     case "google":
     case "gemini":
       return "gemini-2.5-flash";
     case "mistral":
       return "mistral-large-latest";
     case "cohere":
-      return "command-r-plus";
+      return "command-a-03-2025";
     case "openrouter":
       return "openai/gpt-4o";
   }

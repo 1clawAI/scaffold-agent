@@ -211,7 +211,7 @@ function llmModelCall(llm: ThirdPartyLlm): string {
     case "gemini":
       return `google("${GEMINI_GOOGLE_AI_MODEL_DEFAULT}")`;
     case "anthropic":
-      return 'anthropic("claude-sonnet-4-20250514")';
+      return 'anthropic("claude-sonnet-4-6-20250217")';
   }
 }
 
@@ -245,7 +245,7 @@ function llmDefaultModel(llm: ThirdPartyLlm): string {
     case "gemini":
       return `"${GEMINI_GOOGLE_AI_MODEL_DEFAULT}"`;
     case "anthropic":
-      return '"claude-sonnet-4-20250514"';
+      return '"claude-sonnet-4-6-20250217"';
   }
 }
 
@@ -258,14 +258,14 @@ function shroudDefaultModel(upstream: ShroudUpstreamProvider): string {
     case "openai":
       return "gpt-4o";
     case "anthropic":
-      return "claude-sonnet-4-20250514";
+      return "claude-sonnet-4-6-20250217";
     case "google":
     case "gemini":
       return SHROUD_GEMINI_MODEL_DEFAULT;
     case "mistral":
       return "mistral-large-latest";
     case "cohere":
-      return "command-r-plus";
+      return "command-a-03-2025";
     case "openrouter":
       return "openai/gpt-4o";
   }
