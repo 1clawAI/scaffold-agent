@@ -87,10 +87,10 @@ const GEMINI_GOOGLE_AI_MODEL_DEFAULT = "gemini-2.5-flash";
 
 /**
  * Default Gemini model id sent to Shroud (`/v1/chat/completions`). Must match Shroud + Stripe AI
- * Gateway allowlists — see https://docs.1claw.xyz/docs/guides/shroud (`gemini-2.0-flash` in examples).
- * Using e.g. gemini-2.5-flash here can 404 with Stripe-branded errors under LLM token billing.
+ * Gateway allowlists — see https://docs.1claw.xyz/docs/guides/shroud.
+ * `gemini-2.0-flash` was shut down Jun 1 2026; `gemini-2.5-flash` is GA until Oct 2026+.
  */
-const SHROUD_GEMINI_MODEL_DEFAULT = "gemini-2.0-flash";
+const SHROUD_GEMINI_MODEL_DEFAULT = "gemini-2.5-flash";
 
 function ampersendReadmeMarkdown(config: ScaffoldConfig): string {
   const lines = [
@@ -2039,10 +2039,10 @@ export default function Home() {
                 /gemini/.test(t)) ? (
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Shroud with <strong className="text-foreground">LLM token billing</strong> routes models
-                  through Stripe&apos;s AI gateway; some ids (e.g.{" "}
-                  <code className="rounded bg-muted px-1">gemini-2.5-flash</code>) may 404. Try{" "}
-                  <code className="rounded bg-muted px-1">SHROUD_DEFAULT_MODEL=gemini-2.0-flash</code>{" "}
-                  (see{" "}
+                  through Stripe&apos;s AI gateway. Set{" "}
+                  <code className="rounded bg-muted px-1">SHROUD_DEFAULT_MODEL</code> to override (e.g.{" "}
+                  <code className="rounded bg-muted px-1">gemini-2.5-flash</code>,{" "}
+                  <code className="rounded bg-muted px-1">gemini-3.5-flash</code>). See{" "}
                   <a
                     href="https://docs.1claw.xyz/docs/guides/shroud"
                     className="underline hover:text-foreground"
@@ -2329,19 +2329,9 @@ const shroudProvider =
   process.env.SHROUD_LLM_PROVIDER || "${upstream}";
 
 const shroudModelFallback = "${modelFallback}";
-/** Body + X-Shroud-Model; Stripe AI Gateway often 404s on gemini-2.5-flash — remap for Shroud only. */
-const defaultModel = (() => {
-  const raw =
-    (process.env.SHROUD_DEFAULT_MODEL || "").trim() || shroudModelFallback;
-  const p = shroudProvider.toLowerCase();
-  if (
-    (p === "google" || p === "gemini") &&
-    raw === "gemini-2.5-flash"
-  ) {
-    return "gemini-2.0-flash";
-  }
-  return raw;
-})();
+/** Body + X-Shroud-Model */
+const defaultModel =
+  (process.env.SHROUD_DEFAULT_MODEL || "").trim() || shroudModelFallback;
 
 /** Model ID passed to @ai-sdk/google when calling Gemini directly (overrides SHROUD_DEFAULT_MODEL for that path only). */
 const geminiDirectModel =
@@ -3218,18 +3208,8 @@ const shroudProvider =
   process.env.SHROUD_LLM_PROVIDER || "${upstream}";
 
 const shroudModelFallback = "${modelFallback}";
-const defaultModel = (() => {
-  const raw =
-    (process.env.SHROUD_DEFAULT_MODEL || "").trim() || shroudModelFallback;
-  const p = shroudProvider.toLowerCase();
-  if (
-    (p === "google" || p === "gemini") &&
-    raw === "gemini-2.5-flash"
-  ) {
-    return "gemini-2.0-flash";
-  }
-  return raw;
-})();
+const defaultModel =
+  (process.env.SHROUD_DEFAULT_MODEL || "").trim() || shroudModelFallback;
 
 const geminiDirectModel =
   (process.env.GOOGLE_GENERATIVE_AI_MODEL || "").trim() || defaultModel;
