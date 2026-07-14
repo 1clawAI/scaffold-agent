@@ -209,6 +209,8 @@ export async function setupOneClaw(
     shroudEnabled?: boolean;
     /** Ampersend signing key from ampersend.ai — stored at private-keys/ampersend-signing */
     ampersendSigningKey?: string;
+    /** Chains to provision HSM signing keys for (when Intents enabled). */
+    signingChains?: string[];
   },
 ): Promise<OneClawResult> {
   const token = await getToken(apiKey);
@@ -264,11 +266,17 @@ export async function setupOneClaw(
     );
   }
 
-  let signingKeyAddress: string | undefined;
-  if (agentInfo && intents) {
-    const sk = await provisionSigningKey(token, agentInfo.id, "ethereum");
-    if (sk?.address) signingKeyAddress = sk.address;
+  const signingKeys: { chain: string; address: string }[] = [];
+  if (agentInfo && intents && options?.signingChains?.length) {
+    for (const chain of options.signingChains) {
+      const sk = await provisionSigningKey(token, agentInfo.id, chain);
+      if (sk?.address) signingKeys.push({ chain, address: sk.address });
+    }
   }
 
-  return { vaultId, agentInfo, signingKeyAddress };
+  return {
+    vaultId,
+    agentInfo,
+    signingKeys: signingKeys.length > 0 ? signingKeys : undefined,
+  };
 }

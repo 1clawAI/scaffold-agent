@@ -3,6 +3,7 @@ import type {
   AppFramework,
   ChainFramework,
   LlmProvider,
+  OneclawSigningChain,
   SecretsMode,
   ShroudBillingMode,
   ShroudUpstreamProvider,
@@ -27,6 +28,15 @@ const SHROUD_BILLING: readonly ShroudBillingMode[] = [
 ];
 const CHAIN: readonly ChainFramework[] = ["foundry", "hardhat", "none"];
 const FRAMEWORK: readonly AppFramework[] = ["nextjs", "vite", "python"];
+
+export const ONECLAW_SIGNING_CHAINS: readonly OneclawSigningChain[] = [
+  "ethereum",
+  "bitcoin",
+  "solana",
+  "xrp",
+  "cardano",
+  "tron",
+];
 
 /** Defaults when `--non-interactive` omits optional choices */
 export const NON_INTERACTIVE_DEFAULTS = {
@@ -66,6 +76,8 @@ export type CliFlagValues = {
   "oneclaw-agent-api-key"?: string;
   /** Enable Intents on the 1Claw API agent created during vault setup (with -y). */
   "oneclaw-intents"?: boolean;
+  /** Comma-separated signing chains to provision: ethereum,bitcoin,solana,xrp,cardano,tron */
+  "oneclaw-signing-chains"?: string;
   chain?: string;
   framework?: string;
   "skip-npm-install"?: boolean;
@@ -145,6 +157,7 @@ export function parseScaffoldArgv(argv: string[]): ParsedScaffoldArgv {
       "oneclaw-agent-id": { type: "string" },
       "oneclaw-agent-api-key": { type: "string" },
       "oneclaw-intents": { type: "boolean" },
+      "oneclaw-signing-chains": { type: "string" },
       chain: { type: "string" },
       framework: { type: "string" },
       "skip-npm-install": { type: "boolean" },
@@ -281,6 +294,28 @@ export function parseChain(
     throw new Error("CLI: internal — chain");
   }
   return parseEnum("chain", raw, CHAIN);
+}
+
+export function parseOneclawSigningChains(
+  raw: string | undefined,
+): OneclawSigningChain[] {
+  if (!raw || !raw.trim()) return ["ethereum"];
+  const items = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const valid: OneclawSigningChain[] = [];
+  for (const item of items) {
+    if (!(ONECLAW_SIGNING_CHAINS as readonly string[]).includes(item)) {
+      throw new Error(
+        `CLI: invalid signing chain "${item}". Use: ${ONECLAW_SIGNING_CHAINS.join(", ")}`,
+      );
+    }
+    if (!valid.includes(item as OneclawSigningChain)) {
+      valid.push(item as OneclawSigningChain);
+    }
+  }
+  return valid.length > 0 ? valid : ["ethereum"];
 }
 
 export function parseFramework(

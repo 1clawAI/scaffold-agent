@@ -18,12 +18,14 @@ import {
   promptProjectName,
   promptEnvPasswordWithConfirmation,
   promptOneclawIntents,
+  promptOneclawSigningChains,
 } from "./prompts.js";
 import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
 import type {
   AppFramework,
   ChainFramework,
   LlmProvider,
+  OneclawSigningChain,
   ShroudBillingMode,
   ShroudUpstreamProvider,
 } from "./types.js";
@@ -35,6 +37,7 @@ import {
   parseChain,
   parseFramework,
   parseLlm,
+  parseOneclawSigningChains,
   parseSecretsMode,
   parseShroudBilling,
   parseShroudUpstream,
@@ -71,6 +74,8 @@ export type GatheredWizard = {
   agentFileExtras: AgentFileExtras | null;
   /** POST /v1/agents `intents_api_enabled` when vault setup registers an agent. */
   oneclawIntentsEnabled: boolean;
+  /** Which blockchains to provision HSM signing keys for (when Intents enabled). */
+  oneclawSigningChains: OneclawSigningChain[];
 };
 
 function niErr(msg: string): never {
@@ -371,6 +376,7 @@ export async function gatherWizardInputs(
     (generateAgent || llm === "oneclaw");
 
   let oneclawIntentsEnabled = false;
+  let oneclawSigningChains: OneclawSigningChain[] = ["ethereum"];
   if (oneclawAgentWillRegister) {
     if (nonInteractive) {
       oneclawIntentsEnabled = v["oneclaw-intents"] === true;
@@ -380,6 +386,23 @@ export async function gatherWizardInputs(
       oneclawIntentsEnabled = false;
     } else {
       oneclawIntentsEnabled = await promptOneclawIntents();
+    }
+
+    if (oneclawIntentsEnabled) {
+      if (nonInteractive) {
+        oneclawSigningChains = parseOneclawSigningChains(
+          v["oneclaw-signing-chains"],
+        );
+      } else if (
+        v["oneclaw-signing-chains"] !== undefined &&
+        v["oneclaw-signing-chains"] !== ""
+      ) {
+        oneclawSigningChains = parseOneclawSigningChains(
+          v["oneclaw-signing-chains"],
+        );
+      } else {
+        oneclawSigningChains = await promptOneclawSigningChains();
+      }
     }
   }
 
@@ -404,5 +427,6 @@ export async function gatherWizardInputs(
     swarmEntries,
     agentFileExtras: extras,
     oneclawIntentsEnabled,
+    oneclawSigningChains,
   };
 }

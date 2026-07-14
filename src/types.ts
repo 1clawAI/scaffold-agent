@@ -18,6 +18,9 @@ export type ShroudUpstreamProvider =
 /** How Shroud pays upstream LLM providers — user-declared during setup */
 export type ShroudBillingMode = "token_billing" | "provider_api_key";
 
+/** Chains supported by 1Claw HSM signing key provisioning (POST /v1/agents/:id/signing-keys). */
+export type OneclawSigningChain = "ethereum" | "bitcoin" | "solana" | "xrp" | "cardano" | "tron";
+
 export interface SecretsConfig {
   mode: SecretsMode;
   apiKey?: string;
@@ -54,8 +57,8 @@ export interface DeployerConfig {
 export interface OneClawResult {
   vaultId: string;
   agentInfo?: { id: string; apiKey: string };
-  /** HSM-provisioned Ethereum signing key address (when Intents enabled). */
-  signingKeyAddress?: string;
+  /** HSM-provisioned signing key addresses keyed by chain (when Intents enabled). */
+  signingKeys?: { chain: string; address: string }[];
 }
 
 export interface ScaffoldConfig {

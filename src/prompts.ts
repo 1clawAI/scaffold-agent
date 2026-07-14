@@ -1,10 +1,11 @@
-import { select, input, password } from "@inquirer/prompts";
+import { select, checkbox, input, password } from "@inquirer/prompts";
 import type {
   SecretsConfig,
   SecretsMode,
   ChainFramework,
   AppFramework,
   LlmProvider,
+  OneclawSigningChain,
   ShroudBillingMode,
   ShroudUpstreamProvider,
 } from "./types.js";
@@ -135,6 +136,48 @@ export async function promptOneclawIntents(): Promise<boolean> {
       },
     ],
   });
+}
+
+/** Which blockchains to provision HSM signing keys for (multi-select). */
+export async function promptOneclawSigningChains(): Promise<OneclawSigningChain[]> {
+  const selected = await checkbox<OneclawSigningChain>({
+    message:
+      "Which blockchains should the agent have signing keys for? (HSM-backed, keys never leave hardware)",
+    choices: [
+      {
+        value: "ethereum" as const,
+        name: "Ethereum (secp256k1)",
+        checked: true,
+        description: "EVM chains — Ethereum, Base, Optimism, Arbitrum, Polygon, and 24 more",
+      },
+      {
+        value: "solana" as const,
+        name: "Solana (Ed25519)",
+        description: "SOL + SPL token transfers",
+      },
+      {
+        value: "bitcoin" as const,
+        name: "Bitcoin (secp256k1)",
+        description: "P2WPKH bech32 — bc1q… (mainnet) / tb1q… (testnet)",
+      },
+      {
+        value: "xrp" as const,
+        name: "XRP (Ed25519)",
+        description: "30+ transaction types via xrpl_tx_json",
+      },
+      {
+        value: "cardano" as const,
+        name: "Cardano (Ed25519)",
+        description: "Bech32 enterprise — addr1… (requires BLOCKFROST_PROJECT_ID)",
+      },
+      {
+        value: "tron" as const,
+        name: "Tron (secp256k1)",
+        description: "TRC-20 + native TRX transfers",
+      },
+    ],
+  });
+  return selected.length > 0 ? selected : ["ethereum"];
 }
 
 export async function promptIdentity(useOneClaw: boolean): Promise<boolean> {

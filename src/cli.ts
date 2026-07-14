@@ -101,6 +101,8 @@ Shroud (only when --llm oneclaw):
   --oneclaw-agent-api-key     Agent ocv_ key (same conditions)
   --oneclaw-intents           With -y: register the 1Claw API agent with Intents enabled (TEE txs;
                               https://1claw.xyz/intents). Interactive: prompted when vault creates an agent.
+  --oneclaw-signing-chains    Comma-separated chains to provision HSM signing keys for (with --oneclaw-intents).
+                              Values: ethereum,bitcoin,solana,xrp,cardano,tron (default: ethereum)
 
 Chain & UI:
   --chain <framework>         foundry | hardhat | none
@@ -310,6 +312,7 @@ async function main() {
     llm,
     swarmEntries,
     oneclawIntentsEnabled,
+    oneclawSigningChains,
   } = w;
   let {
     shroudUpstream,
@@ -482,6 +485,7 @@ async function main() {
           intentsApiEnabled: oneclawIntentsEnabled,
           shroudEnabled: llm === "oneclaw",
           ampersendSigningKey,
+          signingChains: oneclawIntentsEnabled ? oneclawSigningChains : undefined,
           shroudProviderApiKey:
             shroudProviderKeyForVault && shroudVaultPath
               ? { path: shroudVaultPath, value: shroudProviderKeyForVault }
@@ -503,10 +507,12 @@ async function main() {
           info(
             "1Claw Intents is enabled for this agent — https://1claw.xyz/intents (set allowlists and caps in the dashboard).",
           );
-          if (result.signingKeyAddress) {
-            keyValue("HSM signing key (ethereum)", result.signingKeyAddress);
+          if (result.signingKeys?.length) {
+            for (const sk of result.signingKeys) {
+              keyValue(`HSM signing key (${sk.chain})`, sk.address);
+            }
             info(
-              "An Ethereum signing key was auto-provisioned in the HSM. Fund this address to send transactions via Intents.",
+              `${result.signingKeys.length} signing key(s) auto-provisioned in the HSM. Fund these addresses to send transactions via Intents.`,
             );
           }
         }

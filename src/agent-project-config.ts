@@ -51,6 +51,7 @@ const OPTION_KEY_TO_CLI: Record<string, keyof CliFlagValues> = {
   "oneclaw-agent-id": "oneclaw-agent-id",
   "oneclaw-agent-api-key": "oneclaw-agent-api-key",
   "oneclaw-intents": "oneclaw-intents",
+  "oneclaw-signing-chains": "oneclaw-signing-chains",
   chain: "chain",
   framework: "framework",
   "skip-npm-install": "skip-npm-install",
