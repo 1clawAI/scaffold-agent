@@ -55,6 +55,10 @@ Typical path when you picked **Foundry** or **Hardhat** and want a **local** nod
 
 7. **Open the UI** — Next.js / Vite dev server is usually [http://localhost:3000](http://localhost:3000).
 
+**Shortcut:** with a local chain, you can run **`just quickstart`** instead of steps 3–6 (starts chain in the background, funds, deploys, then starts the app).
+
+**Health check:** run **`just doctor`** anytime to validate tools, `.env`, encrypted secrets, 1Claw IDs, and package installs.
+
 **If you skipped a chain** in the wizard, omit steps 3–5 and point **`scaffold.config.ts`** (and RPC env vars) at the network you use, then **`just deploy`** / **`just start`** as your project README describes. If **`npm install`** didn’t run during scaffold, run it once at the repo root before **`just start`**. **Python (A2A)** projects follow the same `just` commands where applicable; see the generated README.
 
 ## Usage
@@ -70,7 +74,7 @@ npx scaffold-agent@latest my-agent   # creates ./my-agent (skips project name pr
 
 **CLI flags:** Run **`scaffold-agent --help`** / **`-h`** for the full list (every wizard step has a flag; unknown options error). **`--version`** / **`-V`**. **Optional argument:** `project-name` — directory to create (same rules as the interactive prompt: letters, numbers, `-`, `_`), or use **`--project <name>`**.
 
-**Non-interactive / automation:** **`--non-interactive`** / **`-y`** runs with no prompts. Set **`--env-password`** when **`--secrets`** is **`oneclaw`** or **`encrypted`** (min 6 characters). Omitted choices use documented defaults in **`--help`** (e.g. Foundry + Next.js + 1Claw Shroud token billing). Use **`--skip-npm-install`** and **`--skip-auto-fund`** to match the env vars below.
+**Non-interactive / automation:** **`--non-interactive`** / **`-y`** runs with no prompts. Set **`--env-password`** when **`--secrets`** is **`oneclaw`** or **`encrypted`** (min 6 characters). Omitted choices use documented defaults in **`--help`** (e.g. Foundry + Next.js + 1Claw Shroud token billing). Use **`--skip-npm-install`** and **`--skip-auto-fund`** to match the env vars below. With Intents: **`--oneclaw-intents`** and optional **`--oneclaw-signing-chains ethereum,solana`** (see **`--help`**).
 
 **Config file:** **`--from-config agent.json`** merges JSON into the wizard (CLI flags **override** the file). Use **`--dump-config`** or **`--dump-config-out <file>`** to print or save that shape; secret values are **omitted** from the dump. **`--swarm <n>`** (1–64) generates multiple agent wallets; Next/Vite apps get a public **`agents.json`** roster, header agent picker, and **`/swarm`** page. Details: **`AGENTS.md`**.
 
@@ -81,7 +85,7 @@ The wizard walks through:
 1. **Project name** — directory to create (skipped if you pass it as the first argument, e.g. `scaffold-agent my-agent`)
 2. **Secrets management** — 1Claw (HSM-backed vault), encrypted secrets file, or plain `.env`
 3. **Agent identity** — generate one or more Ethereum wallets (**`--swarm`** for many)
-4. **Ampersend SDK** — optional; adds [`@ampersend_ai/ampersend-sdk`](https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk) + **`AMPERSEND.md`** ([docs.ampersend.ai](https://docs.ampersend.ai/), [GitHub](https://github.com/edgeandnode/ampersend-sdk))
+4. **Ampersend SDK** — optional; adds [`@ampersend_ai/ampersend-sdk`](https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk) + **`AMPERSEND.md`** ([docs.ampersend.ai](https://docs.ampersend.ai/), [GitHub](https://github.com/edgeandnode/ampersend-sdk)). Prompts for your Ampersend signing key and stores it in the 1Claw vault (`private-keys/ampersend-signing`) or encrypted `.env`; generated apps fetch it at runtime for x402 payments.
 5. **LLM Provider** — 1Claw, Gemini, OpenAI, or Anthropic
 6. **Chain framework** — Foundry, Hardhat, or none
 7. **App framework** — Next.js, Vite, or Python (Google A2A)
@@ -102,23 +106,30 @@ my-agent/
 │   ├── generate-deployer.mjs     # create deployer wallet if missing (+ auto-fund if RPC up)
 │   ├── fund-deployer.mjs         # fund deployer + agents (incl. swarm roster in public/agents.json)
 │   ├── check-network.mjs         # validate targetNetwork has deployed contracts
+│   ├── doctor.mjs                # just doctor — health check
 │   └── swarm-agents.mjs          # just swarm — append wallets (Next/Vite)
 ├── packages/
 │   ├── foundry/                  # or hardhat/ (Solidity contracts)
 │   └── nextjs/                   # or vite/ or python/ (frontend / agent)
 │       ├── public/agents.json    # swarm roster (addresses only; Next/Vite)
 │       ├── app/
-│       │   ├── page.tsx          # shadcn chat UI
+│       │   ├── layout.tsx        # root layout + shared Header nav
+│       │   ├── page.tsx          # chat UI (suggested prompts, no inline header)
 │       │   ├── identity/page.tsx # ERC-8004 / Agent0 identity + register
-│       │   ├── swarm/page.tsx   # swarm list + local keygen hints
+│       │   ├── balances/page.tsx # deployer + agent balances
+│       │   ├── ens/page.tsx      # ENS resolution + registration links
+│       │   ├── swarm/page.tsx    # swarm list + local keygen hints
 │       │   ├── debug/page.tsx    # deployed contracts (Next only)
 │       │   └── api/
 │       │       ├── chat/route.ts # LLM streaming API
 │       │       └── agent0/lookup/route.ts # server-side registry search
-│       ├── components/ui/        # shadcn Button, Input
+│       ├── components/
+│       │   ├── Header.tsx        # shared nav (Chat, Balances, ENS, Identity, Swarm, Debug)
+│       │   └── ui/               # shadcn Button, Input
 │       ├── contracts/            # auto-generated ABI types
 │       └── ...
-├── .cursor/mcp.json              # 1Claw MCP server config (when 1Claw is selected)
+├── .cursor/mcp.json              # 1Claw MCP for Cursor (when 1Claw is selected)
+├── .mcp.json                     # 1Claw MCP for Claude Code (same server config)
 ├── .env                          # non-sensitive config (gitignored)
 ├── .env.secrets.encrypted        # AES-256-GCM encrypted API keys & private keys (gitignored)
 ├── .gitignore
@@ -134,6 +145,8 @@ my-agent/
 | `just fund`             | Fund `DEPLOYER_ADDRESS`, `AGENT_ADDRESS`, and swarm addresses in `packages/*/public/agents.json` (100 ETH each from account #0) |
 | `just deploy`           | Deploy contracts & auto-gen ABIs (prompts for secrets password if encrypted)             |
 | `just start`            | Start frontend or agent (runs `check-network` first as a warning)                        |
+| `just quickstart`       | One-command local setup: chain (background) → fund → deploy → start (Foundry/Hardhat + UI) |
+| `just doctor`           | Health check: validate env, tools, 1Claw IDs, and package installs                     |
 | `just check-network`    | Validate `targetNetwork` chainId has contracts in `deployedContracts.ts`                  |
 | `just use-network KEY`  | Switch `targetNetwork` in `scaffold.config.ts` and run check (keys: ethereum, base, sepolia, baseSepolia, polygon, bnb, localhost) |
 | `just accounts`         | Show QR codes for `DEPLOYER_ADDRESS` + agent address (repo-root `.env`)                  |
@@ -143,6 +156,9 @@ my-agent/
 | `just env KEY VALUE`    | Upsert repo-root `.env` (e.g. **`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`**)                |
 | `just enc KEY VALUE`    | Update **`.env.secrets.encrypted`** (password prompt)                                    |
 | `just vault PATH VALUE` | Store a secret in the **1Claw vault** (wraps `with-secrets`)                             |
+| `just list-1claw`       | Print vault + agent UUIDs from the 1Claw API (`ONECLAW_API_KEY`)                          |
+| `just sync-1claw-env`   | List + write first vault + agent UUID into repo-root `.env`                                |
+| `just reset`            | Re-bootstrap 1Claw (new vault + agent; read warning first)                               |
 | `just reown PROJECT_ID` | WalletConnect Cloud id → `.env` (Next: `NEXT_PUBLIC_…`, Vite: `VITE_…`)                  |
 
 ### ABI type generation
@@ -152,7 +168,7 @@ my-agent/
 [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2). This gives you
 type-safe contract addresses and ABIs in your frontend code.
 
-**Next.js apps** also get **`/debug`** (bug icon in the header): read-only view of deployed addresses and ABI, similar to [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2) Debug Contracts.
+**Next.js apps** get a shared **`Header`** with nav tabs (Chat, Balances, ENS, Identity, Swarm, Debug) and **`/debug`**: read-only view of deployed addresses and ABI via [Scaffold UI](https://github.com/scaffold-eth/scaffold-ui), similar to [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2) Debug Contracts.
 
 ### Unified network model
 
@@ -177,6 +193,8 @@ Next.js and Vite projects include **`lib/agent-onchain-tools.ts`** — preset [V
 - **`oneclaw_list_signing_keys`** — list the agent's HSM-backed signing keys (address, chain, status).
 - **`oneclaw_list_transactions`** — list recent Intents API transactions for this agent.
 
+When **Ampersend** is enabled, the chat route also exposes **`x402_paid_fetch`** for paid HTTP requests over x402.
+
 The 1Claw intent tools default the `chain` parameter to the active network's 1Claw slug via `ONECLAW_CHAIN_NAMES` — covering all 29 EVM mainnets, testnets, plus non-EVM chains (Bitcoin, Solana, XRP, Cardano, Tron).
 
 ### Route loading & frontend performance
@@ -185,7 +203,7 @@ The 1Claw intent tools default the `chain` parameter to the active network's 1Cl
 
 **Vite:** **`/identity`**, **`/ens`**, **`/balances`**, and **`/swarm`** are loaded with **`React.lazy`** and a shared **`PageLoading`** skeleton so those chunks download only when you open those routes (home **`Chat`** stays eager).
 
-**UX / a11y (both stacks):** **Skip to main content** link (keyboard), visible **`:focus-visible`** rings on interactive controls, chat **role** landmarks and **context-aware error hints** (Gemini quota vs 1Claw vs generic env), local **faucet** uses an in-app toast instead of **`window.alert`**, **Balances** explains when no ERC-20 tokens are configured for the chain.
+**UX / a11y (both stacks):** **1Claw-inspired dark theme** (crimson accent, Inter font, sticky glass header), **skip to main content** link (keyboard), visible **`:focus-visible`** rings on interactive controls, chat **role** landmarks, **suggested prompts** on the empty chat state, and **context-aware error hints** (Gemini quota vs 1Claw vs generic env). Local **faucet** uses an in-app toast instead of **`window.alert`**; **Balances** explains when no ERC-20 tokens are configured for the chain.
 
 ### 1Claw IDs programmatically
 
@@ -219,11 +237,11 @@ When you choose **1Claw (1claw.xyz)**, the CLI:
 
 ### HSM signing key provisioning
 
-When **1Claw Intents** is enabled (`--oneclaw-intents`), the CLI auto-provisions an **Ethereum signing key** in the HSM via `POST /v1/agents/:id/signing-keys`. The key is generated and stored inside the `__agent-keys` vault — never exposed. The CLI prints the derived address so you can fund it. 1Claw supports signing keys for 6 chains: Ethereum (secp256k1), Bitcoin (secp256k1), Solana (Ed25519), XRP (Ed25519), Cardano (Ed25519), Tron (secp256k1). Additional chains can be provisioned via the [1Claw dashboard](https://1claw.xyz) or SDK.
+When **1Claw Intents** is enabled (`--oneclaw-intents`), the CLI provisions **HSM signing keys** via `POST /v1/agents/:id/signing-keys` for each chain you select. Interactive runs show a multi-select; non-interactive runs use **`--oneclaw-signing-chains`** (comma-separated: `ethereum`, `bitcoin`, `solana`, `xrp`, `cardano`, `tron`; default `ethereum`). Keys are generated inside the `__agent-keys` vault — never exposed. The CLI prints each address with a **testnet faucet link** and **dashboard deep links** (`https://1claw.xyz/vaults`, `https://1claw.xyz/agents/<id>`). Additional chains can be provisioned later via the [1Claw dashboard](https://1claw.xyz) or SDK.
 
 ### MCP server
 
-When 1Claw is selected (secrets or LLM), the scaffold generates **`.cursor/mcp.json`** with the [**@1claw/mcp**](https://www.npmjs.com/package/@1claw/mcp) server pre-configured. This gives AI agents in Cursor access to 44 MCP tools: vault secrets, Intents API (simulate, submit, sign), signing key management, treasury proposals, and execution intents. Only `ONECLAW_AGENT_API_KEY` is required — agent ID and vault are auto-discovered.
+When 1Claw is selected (secrets or LLM), the scaffold generates **`.cursor/mcp.json`** (Cursor) and **`.mcp.json`** (Claude Code) with the [**@1claw/mcp**](https://www.npmjs.com/package/@1claw/mcp) server pre-configured. This gives AI agents access to 44 MCP tools: vault secrets, Intents API (simulate, submit, sign), signing key management, treasury proposals, and execution intents. Only `ONECLAW_AGENT_API_KEY` is required — agent ID and vault are auto-discovered.
 
 ## LLM providers
 
