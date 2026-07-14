@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ENV_SECRET_KEY_NAMES } from "./env.js";
+import type { ScaffoldConfig } from "../types.js";
 
 const __projectScriptsDir = dirname(fileURLToPath(import.meta.url));
 
@@ -2241,5 +2242,87 @@ function main() {
 }
 
 main();
+`;
+}
+
+export function getDoctorScript(config: ScaffoldConfig): string {
+  const hasOneclaw = config.secrets.mode === "oneclaw" || config.llm === "oneclaw";
+  const hasChain = config.chain !== "none";
+  const hasUi = config.framework === "nextjs" || config.framework === "vite";
+
+  return `#!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { execSync } from "node:child_process";
+
+const ROOT = process.cwd();
+let passed = 0;
+let warned = 0;
+let failed = 0;
+
+function ok(msg) { passed++; console.log("  \\x1b[32m✓\\x1b[0m " + msg); }
+function warn(msg) { warned++; console.log("  \\x1b[33m!\\x1b[0m " + msg); }
+function fail(msg) { failed++; console.log("  \\x1b[31m✗\\x1b[0m " + msg); }
+
+function hasCmd(cmd) {
+  try { execSync("which " + cmd, { stdio: "ignore" }); return true; }
+  catch { return false; }
+}
+
+function envVal(key) {
+  const envPath = join(ROOT, ".env");
+  if (!existsSync(envPath)) return undefined;
+  const m = readFileSync(envPath, "utf8").match(new RegExp("^" + key + "=(.*)$", "m"));
+  return m ? m[1].trim().replace(/^['"]|['"]$/g, "") : undefined;
+}
+
+console.log("\\n\\x1b[1m  scaffold-agent doctor\\x1b[0m\\n");
+
+// ─── Prerequisites ──────────────────────────
+console.log("\\x1b[36m  Prerequisites\\x1b[0m");
+hasCmd("node") ? ok("node " + process.version) : fail("node not found");
+hasCmd("npm") ? ok("npm available") : fail("npm not found");
+${hasChain ? `hasCmd("forge") ? ok("forge (Foundry) available") : warn("forge not found — run: curl -L https://foundry.paradigm.xyz | bash && foundryup");
+hasCmd("anvil") ? ok("anvil available") : warn("anvil not found (part of Foundry)");` : "// no chain tools needed"}
+${hasUi ? `hasCmd("just") ? ok("just (task runner) available") : warn("just not found — https://github.com/casey/just#installation");` : ""}
+
+// ─── Environment ────────────────────────────
+console.log("\\n\\x1b[36m  Environment\\x1b[0m");
+existsSync(join(ROOT, ".env")) ? ok(".env exists") : warn(".env missing — run scaffold setup or just env");
+${config.secrets.mode !== "none" ? `existsSync(join(ROOT, ".env.secrets.encrypted")) ? ok(".env.secrets.encrypted exists") : warn(".env.secrets.encrypted missing — run just enc to add secrets");` : ""}
+
+const deployer = envVal("DEPLOYER_ADDRESS");
+deployer ? ok("DEPLOYER_ADDRESS = " + deployer.slice(0, 10) + "...") : warn("DEPLOYER_ADDRESS not set in .env");
+const agent = envVal("AGENT_ADDRESS");
+agent ? ok("AGENT_ADDRESS = " + agent.slice(0, 10) + "...") : warn("AGENT_ADDRESS not set in .env");
+
+${hasOneclaw ? `// ─── 1Claw ────────────────────────────────
+console.log("\\n\\x1b[36m  1Claw\\x1b[0m");
+const vaultId = envVal("ONECLAW_VAULT_ID");
+vaultId ? ok("ONECLAW_VAULT_ID = " + vaultId) : warn("ONECLAW_VAULT_ID not set — run: just sync-1claw-env");
+const agentId = envVal("ONECLAW_AGENT_ID");
+agentId ? ok("ONECLAW_AGENT_ID = " + agentId) : warn("ONECLAW_AGENT_ID not set — run: just sync-1claw-env");
+if (vaultId) console.log("    \\x1b[90mDashboard: https://1claw.xyz/vaults\\x1b[0m");
+if (agentId) console.log("    \\x1b[90mAgent:     https://1claw.xyz/agents/" + agentId + "\\x1b[0m");` : ""}
+
+${hasUi ? `// ─── Packages ─────────────────────────────
+console.log("\\n\\x1b[36m  Packages\\x1b[0m");
+const uiPkg = join(ROOT, "packages/${config.framework === "nextjs" ? "nextjs" : "vite"}/node_modules");
+existsSync(uiPkg) ? ok("UI dependencies installed") : warn("UI dependencies missing — run: npm install");` : ""}
+
+${hasChain ? `const chainPkg = join(ROOT, "packages/${config.chain}/node_modules");
+existsSync(chainPkg) ? ok("${config.chain} dependencies installed") : warn("${config.chain} dependencies missing — run: npm install");` : ""}
+
+// ─── Summary ──────────────────────────────
+console.log("");
+if (failed > 0) {
+  console.log("  \\x1b[31m" + failed + " issue(s)\\x1b[0m, " + warned + " warning(s), " + passed + " passed");
+  process.exit(1);
+} else if (warned > 0) {
+  console.log("  \\x1b[33m" + warned + " warning(s)\\x1b[0m, " + passed + " passed — looks good overall");
+} else {
+  console.log("  \\x1b[32mAll " + passed + " checks passed — ready to build!\\x1b[0m");
+}
+console.log("");
 `;
 }

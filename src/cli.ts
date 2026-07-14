@@ -32,6 +32,16 @@ import type {
   SwarmAgentDef,
 } from "./types.js";
 
+/** Testnet faucet URLs for each signing chain family. */
+const CHAIN_FAUCETS: Record<string, string> = {
+  ethereum: "https://cloud.google.com/application/web3/faucet/ethereum/sepolia",
+  bitcoin: "https://faucet.coinbin.org (signet — no captcha)",
+  solana: "https://faucet.solana.com (devnet — GitHub login)",
+  xrp: "https://xrpl.org/resources/dev-tools/xrp-faucets",
+  cardano: "https://faucet.preprod.world.dev.cardano.org",
+  tron: "https://shasta.tronex.io (2,000 TRX + 1,000 USDT)",
+};
+
 function readOwnPackageJson(): {
   name: string;
   version: string;
@@ -496,8 +506,14 @@ async function main() {
       oneClawAgentInfo = result.agentInfo;
       spinner.succeed("Keys stored in 1Claw vault");
       keyValue("Vault ID", vaultId);
+      console.log(
+        chalk.gray(`  Dashboard: https://1claw.xyz/vaults`),
+      );
       if (oneClawAgentInfo) {
         keyValue("1Claw Agent ID", oneClawAgentInfo.id);
+        console.log(
+          chalk.gray(`  Dashboard: https://1claw.xyz/agents/${oneClawAgentInfo.id}`),
+        );
         if (llm === "oneclaw") {
           info(
             "This UUID is your ONECLAW_AGENT_ID for Shroud — not the same as AGENT_ADDRESS (Ethereum wallet below).",
@@ -505,11 +521,16 @@ async function main() {
         }
         if (oneclawIntentsEnabled) {
           info(
-            "1Claw Intents is enabled for this agent — https://1claw.xyz/intents (set allowlists and caps in the dashboard).",
+            "1Claw Intents is enabled for this agent — set allowlists, daily caps, and per-chain guardrails in the dashboard.",
           );
           if (result.signingKeys?.length) {
+            console.log("");
             for (const sk of result.signingKeys) {
               keyValue(`HSM signing key (${sk.chain})`, sk.address);
+              const faucet = CHAIN_FAUCETS[sk.chain];
+              if (faucet) {
+                console.log(chalk.gray(`    Testnet faucet: ${faucet}`));
+              }
             }
             info(
               `${result.signingKeys.length} signing key(s) auto-provisioned in the HSM. Fund these addresses to send transactions via Intents.`,
@@ -879,12 +900,39 @@ async function main() {
     }
   }
 
+  if (chain !== "none" && framework !== "python") {
+    console.log("");
+    console.log(
+      chalk.white("  just quickstart      # one-command: chain → fund → deploy → start"),
+    );
+  }
+  console.log(
+    chalk.white("  just doctor          # health check: validate env + tools"),
+  );
+
   console.log("");
   console.log(
     chalk.gray(
       "  Install just separately for chain/deploy/start: https://just.systems/man/en/installation.html",
     ),
   );
+
+  // ── Useful links ───────────────────────────────────────────────────────
+  console.log("");
+  console.log(chalk.gray("  Useful links:"));
+  if (secrets.mode === "oneclaw" || llm === "oneclaw") {
+    console.log(chalk.gray("    1Claw Dashboard   https://1claw.xyz"));
+    console.log(chalk.gray("    1Claw Docs        https://docs.1claw.xyz"));
+    console.log(chalk.gray("    Shroud Docs       https://docs.1claw.xyz/docs/guides/shroud"));
+    if (oneclawIntentsEnabled) {
+      console.log(chalk.gray("    Intents API       https://1claw.xyz/intents"));
+    }
+  }
+  console.log(chalk.gray("    Scaffold-ETH      https://github.com/scaffold-eth/scaffold-eth-2"));
+  if (installAmpersendSdk) {
+    console.log(chalk.gray("    Ampersend         https://ampersend.ai"));
+  }
+
   console.log("");
   console.log(chalk.cyan("  Happy building!"));
   console.log("");

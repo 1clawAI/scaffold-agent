@@ -85,7 +85,7 @@ export default function EnsPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border px-6 py-4 flex items-center gap-4 flex-wrap">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 flex-wrap sticky top-0 z-40">
         <Link
           ${lp("/")}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
@@ -93,8 +93,8 @@ export default function EnsPage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-          <BadgeCheck className="h-4 w-4 text-muted-foreground" />
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <BadgeCheck className="h-4 w-4 text-primary" />
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-sm font-semibold">ENS for your agent</h1>

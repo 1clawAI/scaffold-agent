@@ -213,7 +213,7 @@ export default function SwarmPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border px-6 py-4 flex items-center gap-4 flex-wrap">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 flex-wrap sticky top-0 z-40">
         <Link
           ${lp("/")}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
@@ -222,7 +222,7 @@ export default function SwarmPage() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-semibold">Swarm</h1>
+          <h1 className="text-sm font-semibold tracking-tight">Swarm</h1>
           <p className="text-xs text-muted-foreground">
             On-chain agent wallets — add more with{" "}
             <code className="rounded bg-muted px-1">just swarm agents=N</code>

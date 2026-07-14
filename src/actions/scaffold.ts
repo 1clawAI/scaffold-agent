@@ -9,6 +9,7 @@ import type {
 } from "../types.js";
 import {
   getCheckNetworkScript,
+  getDoctorScript,
   getDeployFoundryScript,
   getDeployHardhatScript,
   getDeployNetworksModuleScript,
@@ -402,24 +403,29 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     )}\n`,
   );
 
-  // Generate .cursor/mcp.json when 1Claw is used (secrets or LLM)
+  // Generate MCP configs when 1Claw is used (secrets or LLM)
   if (config.secrets.mode === "oneclaw" || config.llm === "oneclaw") {
-    dir(root, ".cursor");
-    const mcpConfig = {
-      mcpServers: {
-        "1claw": {
-          command: "npx",
-          args: ["-y", "@1claw/mcp@0.40.3"],
-          env: {
-            ONECLAW_AGENT_API_KEY: "${ONECLAW_AGENT_API_KEY}",
-          },
-        },
+    const mcpServerDef = {
+      command: "npx",
+      args: ["-y", "@1claw/mcp@0.40.3"],
+      env: {
+        ONECLAW_AGENT_API_KEY: "${ONECLAW_AGENT_API_KEY}",
       },
     };
+
+    // Cursor: .cursor/mcp.json
+    dir(root, ".cursor");
     file(
       join(root, ".cursor"),
       "mcp.json",
-      JSON.stringify(mcpConfig, null, 2) + "\n",
+      JSON.stringify({ mcpServers: { "1claw": mcpServerDef } }, null, 2) + "\n",
+    );
+
+    // Claude Code: .mcp.json (root-level, Claude Code convention)
+    file(
+      root,
+      ".mcp.json",
+      JSON.stringify({ mcpServers: { "1claw": mcpServerDef } }, null, 2) + "\n",
     );
   }
 
@@ -454,7 +460,7 @@ ${config.chain !== "none" ? "\n**Local deploy:** **\`just generate\`** tries to 
 ${config.chain !== "none" ? "| \`just chain\` | Start local blockchain |\n| \`just fund\` | Fund \`DEPLOYER_ADDRESS\`, \`AGENT_ADDRESS\`, and any swarm rows in \`packages/*/public/agents.json\` (100 ETH each from account #0) |\n| \`just deploy\` | Deploy contracts & auto-generate ABI types (optional: \`just deploy base\`, \`just deploy --network sepolia\`) |\n| \`just verify\` | Verify \`AgentWallet\` on an explorer (default network: sepolia; e.g. \`just verify base\`) |\n" : ""}${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just list-1claw\` | Print vault IDs + agent UUIDs from API (\`ONECLAW_API_KEY\`) |\n| \`just sync-1claw-env\` | List + write first vault + agent UUID into repo-root \`.env\` |\n| \`just reset\` | **Re-bootstrap 1Claw** — new vault + secrets + agent (see warning; use \`just reset -- --yes\` to skip confirm) |\n" : ""}| \`just env KEY VALUE\` | Upsert repo-root \`.env\` (e.g. **Reown** \`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID\`${config.framework === "vite" ? " or \`VITE_WALLETCONNECT_PROJECT_ID\`" : ""}) |\n| \`just enc KEY VALUE\` | Add/update a key in \`.env.secrets.encrypted\` (password prompt) |\n${config.secrets.mode === "oneclaw" || config.llm === "oneclaw" ? "| \`just vault PATH VALUE\` | Store a secret in your **1Claw vault** |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just reown PROJECT_ID\` | WalletConnect Cloud id → \`.env\` |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just register-agent\` | Register ERC-8004 agent on-chain (\`AGENT_PRIVATE_KEY\`; uses \`scaffold.config\` network) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just swarm agents=N\` | Add **N** swarm wallets (\`public/agents.json\` + \`SWARM_AGENT_KEYS_JSON\`; default \`agents=1\`) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just balances\` | Native balance on **all** networks in \`network-definitions\` (\`DEPLOYER_ADDRESS\` + agent; \`rpcOverrides\` from \`scaffold.config\`) |\n" : ""}${config.framework === "nextjs" || config.framework === "vite" ? "| \`just ship\` | Deploy to **Vercel** (production); \`just ship name=my-name\` to choose name; \`just ship preview\` for preview deploy |\n| \`just ship-env KEY VALUE\` | Push an env var to the Vercel project; \`just ship-env sync\` pushes all known vars from \`.env\` |\n" : ""}| \`just start\` | Start the frontend / agent (may prompt for secrets password) |
 | \`just accounts\` | QR codes for \`DEPLOYER_ADDRESS\` + agent (\`AGENT_ADDRESS\` / \`NEXT_PUBLIC_AGENT_ADDRESS\`; repo-root \`.env\`) |
 | \`just generate\` | Generate a deployer wallet (password prompt if \`.env.secrets.encrypted\` exists) |
-${config.framework === "nextjs" || config.framework === "vite" ? "| \`just check-network\` | Validate \`targetNetwork\` chainId has deployments in \`deployedContracts.ts\` |\n| \`just use-network <key>\` | Switch \`targetNetwork\` in \`scaffold.config.ts\` and run check (keys: ethereum, base, sepolia, baseSepolia, polygon, bnb, localhost) |\n" : ""}
+${config.framework === "nextjs" || config.framework === "vite" ? "| \`just check-network\` | Validate \`targetNetwork\` chainId has deployments in \`deployedContracts.ts\` |\n| \`just use-network <key>\` | Switch \`targetNetwork\` in \`scaffold.config.ts\` and run check (keys: ethereum, base, sepolia, baseSepolia, polygon, bnb, localhost) |\n" : ""}${config.chain !== "none" && config.framework !== "python" ? "| \`just quickstart\` | One-command local setup: chain → fund → deploy → start |\n" : ""}| \`just doctor\` | Health check: validate env, tools, and setup |
 ${config.installAmpersendSdk ? "\n## Ampersend (x402 payments)\n\nSee **[\\`AMPERSEND.md\\`](./AMPERSEND.md)** — [docs](https://docs.ampersend.ai/), [npm](https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk), [GitHub](https://github.com/edgeandnode/ampersend-sdk).\n" : ""}
 ## Secrets
 
@@ -710,6 +716,35 @@ function writeJustfile(root: string, config: ScaffoldConfig) {
     );
   }
 
+  // just quickstart — one-command local dev setup
+  if (config.chain !== "none" && config.framework !== "python") {
+    lines.push(
+      "# One-command local setup: chain (background) → fund → deploy → start",
+      "quickstart:",
+      `    #!/usr/bin/env bash`,
+      `    set -euo pipefail`,
+      `    echo "Starting local chain in background..."`,
+      `    just chain &`,
+      `    CHAIN_PID=$!`,
+      `    sleep 3`,
+      `    echo "Funding deployer + agent..."`,
+      `    just fund || true`,
+      `    echo "Deploying contracts..."`,
+      `    just deploy`,
+      `    echo "Starting app..."`,
+      `    just start`,
+      "",
+    );
+  }
+
+  // just doctor — health check
+  lines.push(
+    "# Health check: validate env vars, connectivity, and setup",
+    "doctor:",
+    "    node scripts/doctor.mjs",
+    "",
+  );
+
   file(root, "justfile", lines.join("\n"));
 }
 
@@ -748,6 +783,7 @@ function writeScripts(root: string, config: ScaffoldConfig) {
     file(scripts, "ship-env.mjs", getShipEnvScript(config.framework));
     file(scripts, "check-network.mjs", getCheckNetworkScript());
   }
+  file(scripts, "doctor.mjs", getDoctorScript(config));
 
   // ── generate-abi-types.mjs ──────────────────────────────────────────────
   const abiScript = `#!/usr/bin/env node
@@ -1206,8 +1242,8 @@ const SHADCN_CSS = `@tailwind base;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
@@ -1218,28 +1254,28 @@ const SHADCN_CSS = `@tailwind base;
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --ring: 0 72% 51%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 240 15% 4%;
+    --foreground: 0 0% 95%;
+    --card: 240 12% 7%;
+    --card-foreground: 0 0% 95%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 14%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 60%;
+    --accent: 240 5% 14%;
+    --accent-foreground: 0 0% 95%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 240 5% 16%;
+    --input: 240 5% 16%;
+    --ring: 0 72% 51%;
   }
 }
 
@@ -1249,11 +1285,15 @@ const SHADCN_CSS = `@tailwind base;
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   }
-  /* Keyboard focus: visible ring without changing mouse click outline behavior */
   :where(a, button, input, textarea, select, summary):focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 }
 `;
 
@@ -2023,14 +2063,14 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen">
       <header
-        className="border-b border-border px-6 py-4 flex items-center gap-3"
+        className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-3 sticky top-0 z-40"
         role="banner"
       >
         <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
           <Bot className="h-4 w-4 text-primary-foreground" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-semibold">${projectName}</h1>
+          <h1 className="text-sm font-semibold tracking-tight">${projectName}</h1>
           <p className="text-xs text-muted-foreground">Onchain AI Agent</p>
         </div>${headerRight}
       </header>
@@ -2115,17 +2155,38 @@ export default function Home() {
 
       <main
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-6"
+        className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin"
         aria-label="Chat conversation"
       >
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
-              <Bot className="h-8 w-8 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-4">
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Bot className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <p className="font-medium">How can I help you?</p>
-              <p className="text-sm text-muted-foreground mt-1">Send a message to start chatting with your agent.</p>
+              <p className="text-lg font-semibold tracking-tight">How can I help you?</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                I can interact with smart contracts, send transactions, and manage on-chain operations.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
+              {[
+                "What contracts are deployed?",
+                "Check my wallet balance",
+                "Read a contract function",
+                "Help me send a transaction",
+              ].map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => {
+                    handleInputChange({ target: { value: prompt } } as React.ChangeEvent<HTMLInputElement>);
+                  }}
+                  className="rounded-lg border border-border bg-card px-3 py-2.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  {prompt}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -2170,14 +2231,14 @@ export default function Home() {
 
       <form
         onSubmit={handleSubmit}
-        className="border-t border-border p-4 flex gap-3"
+        className="border-t border-border bg-card/50 backdrop-blur-sm p-4 flex gap-3"
         aria-label="Send a message to the agent"
       >
         <Input
           value={input}
           onChange={handleInputChange}
           placeholder="Send a message…"
-          className="flex-1"
+          className="flex-1 bg-background"
           disabled={isLoading}
           autoFocus
           name="message"
@@ -2228,7 +2289,7 @@ export default function DebugPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border px-6 py-4 flex items-center gap-4">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 sticky top-0 z-40">
         <Link
           href="/"
           className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
@@ -2236,8 +2297,8 @@ export default function DebugPage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-          <Bug className="h-4 w-4 text-muted-foreground" />
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Bug className="h-4 w-4 text-primary" />
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-sm font-semibold">Debug contracts</h1>
@@ -3124,19 +3185,22 @@ module.exports = function stubPinoPretty() {
     pkg,
     "app/layout.tsx",
     `import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+
 export const metadata: Metadata = {
   title: "${config.projectName}",
-  description: "Onchain AI Agent",
+  description: "Onchain AI Agent — powered by 1Claw",
   icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body>
+    <html lang="en" className={\`dark \${inter.variable}\`}>
+      <body className={inter.className}>
         <Providers>
           <a
             href="#site-main"
@@ -3159,7 +3223,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     pkg,
     "public/icon.svg",
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="App">
-  <rect width="32" height="32" rx="8" fill="#6366f1"/>
+  <rect width="32" height="32" rx="8" fill="#dc2626"/>
   <path fill="white" d="M8 20c0-4 3-7 8-7s8 3 8 7v2H8v-2zm4-9a4 4 0 1 1 8 0 4 4 0 0 1-8 0z" opacity=".9"/>
 </svg>
 `,
@@ -3801,6 +3865,9 @@ interface ImportMeta {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet" />
     <title>${config.projectName}</title>
   </head>
   <body class="antialiased">
