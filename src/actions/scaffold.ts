@@ -64,7 +64,7 @@ const X402_FETCH_VERSION = "^2.11.0";
 const X402_CORE_VERSION = "^2.11.0";
 
 /** 1Claw SDK version pinned for generated Next/Vite apps (vault reads in chat routes). */
-const ONECLAW_SDK_VERSION = "0.17.0";
+const ONECLAW_SDK_VERSION = "0.41.2";
 
 /** Scaffold UI monorepo packages — https://github.com/scaffold-eth/scaffold-ui */
 const SCAFFOLD_UI_HOOKS_VERSION = "0.1.8";
@@ -75,7 +75,7 @@ const SCAFFOLD_UI_DEBUG_CONTRACTS_VERSION = "0.1.9";
 const CHAT_SYSTEM_TOOLS_SUFFIX =
   " You have server tools (list_deployed_contracts, contract_read) for this repo's deployed contracts and RPC; prefer them over guessing addresses or ABIs.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
-  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit, those call 1Claw Intents (TEE signing; https://1claw.xyz/intents). Never submit high-value txs without explicit user confirmation.";
+  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit / oneclaw_intent_sign_only, those call 1Claw Intents API (HSM/TEE signing across 29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron; https://1claw.xyz/intents). Signing keys never leave the HSM. Never submit high-value txs without explicit user confirmation. Use oneclaw_list_signing_keys to check available keys.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
   " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
 
@@ -268,6 +268,10 @@ function shroudDefaultModel(upstream: ShroudUpstreamProvider): string {
       return "command-a-03-2025";
     case "openrouter":
       return "openai/gpt-4o";
+    case "darkbloom":
+      return "gpt-4o";
+    case "venice":
+      return "llama-3.3-70b";
   }
 }
 
@@ -397,6 +401,27 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
       2,
     )}\n`,
   );
+
+  // Generate .cursor/mcp.json when 1Claw is used (secrets or LLM)
+  if (config.secrets.mode === "oneclaw" || config.llm === "oneclaw") {
+    dir(root, ".cursor");
+    const mcpConfig = {
+      mcpServers: {
+        "1claw": {
+          command: "npx",
+          args: ["-y", "@1claw/mcp@0.40.3"],
+          env: {
+            ONECLAW_AGENT_API_KEY: "${ONECLAW_AGENT_API_KEY}",
+          },
+        },
+      },
+    };
+    file(
+      join(root, ".cursor"),
+      "mcp.json",
+      JSON.stringify(mcpConfig, null, 2) + "\n",
+    );
+  }
 
   if (config.installAmpersendSdk) {
     file(root, "AMPERSEND.md", ampersendReadmeMarkdown(config));

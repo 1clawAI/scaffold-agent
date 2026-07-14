@@ -18,6 +18,8 @@ const SHROUD_UPSTREAM: readonly ShroudUpstreamProvider[] = [
   "mistral",
   "cohere",
   "openrouter",
+  "darkbloom",
+  "venice",
 ];
 const SHROUD_BILLING: readonly ShroudBillingMode[] = [
   "token_billing",

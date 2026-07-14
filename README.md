@@ -118,6 +118,7 @@ my-agent/
 │       ├── components/ui/        # shadcn Button, Input
 │       ├── contracts/            # auto-generated ABI types
 │       └── ...
+├── .cursor/mcp.json              # 1Claw MCP server config (when 1Claw is selected)
 ├── .env                          # non-sensitive config (gitignored)
 ├── .env.secrets.encrypted        # AES-256-GCM encrypted API keys & private keys (gitignored)
 ├── .gitignore
@@ -171,9 +172,12 @@ Next.js and Vite projects include **`lib/agent-onchain-tools.ts`** — preset [V
 - **`list_deployed_contracts`** — enumerate addresses from `deployedContracts.ts` (hints active chain).
 - **`contract_read`** — call any view/pure function via RPC using the deployed ABI (defaults to active network).
 - **`oneclaw_intent_simulate`** — simulate a transaction via [1Claw Intents](https://1claw.xyz/intents) + Tenderly (when 1Claw SDK is included).
-- **`oneclaw_intent_submit`** — submit a signed transaction intent to 1Claw's TEE (keys never in the model).
+- **`oneclaw_intent_submit`** — submit a signed transaction intent to 1Claw's HSM/TEE (keys never in the model).
+- **`oneclaw_intent_sign_only`** — sign a transaction without broadcasting (BYORPC — for MEV protection, Flashbots, custom relayers).
+- **`oneclaw_list_signing_keys`** — list the agent's HSM-backed signing keys (address, chain, status).
+- **`oneclaw_list_transactions`** — list recent Intents API transactions for this agent.
 
-The 1Claw intent tools default the `chain` parameter to the active network's 1Claw slug via a built-in `ONECLAW_CHAIN_NAMES` mapping.
+The 1Claw intent tools default the `chain` parameter to the active network's 1Claw slug via `ONECLAW_CHAIN_NAMES` — covering all 29 EVM mainnets, testnets, plus non-EVM chains (Bitcoin, Solana, XRP, Cardano, Tron).
 
 ### Route loading & frontend performance
 
@@ -206,12 +210,20 @@ When you choose **1Claw (1claw.xyz)**, the CLI:
 - If you pick **Gemini, OpenAI, or Anthropic** as the LLM, the CLI can store that
   provider’s API key in the vault as **`llm-api-key`** (optional — you can add it later in the dashboard)
 - If you pick **1Claw** as the LLM, chat uses **[Shroud](https://docs.1claw.xyz/docs/guides/shroud)**. During setup the CLI **registers a 1Claw agent** (unless you already get one from generating an on-chain agent wallet) and writes **`ONECLAW_AGENT_ID`** + **`ONECLAW_AGENT_API_KEY`** to your env when vault creation succeeds — you don’t need to paste them manually. The Shroud agent **UUID is not** your Ethereum **`AGENT_ADDRESS`**. With vault BYOK, set **`ONECLAW_VAULT_ID`** too or Shroud’s `vault://…` header is invalid.
-  You choose an **upstream** provider — **`openai`**, **`anthropic`**, **`google`** / **`gemini`**, **`mistral`**, **`cohere`**, or **`openrouter`** (`SHROUD_LLM_PROVIDER`); Shroud proxies to it.
+  You choose an **upstream** provider — **`openai`**, **`anthropic`**, **`google`** / **`gemini`**, **`mistral`**, **`cohere`**, **`openrouter`**, **`darkbloom`** (E2E encrypted Apple Silicon TEE), or **`venice`** (zero-retention + optional TEE/E2EE) (`SHROUD_LLM_PROVIDER`); Shroud proxies to it.
   The CLI asks how upstream LLM usage is paid:
     - **LLM Token Billing** on [1claw.xyz](https://1claw.xyz) — set **`SHROUD_BILLING_MODE=token_billing`**; no provider key.
     - **Your own API key** — set **`SHROUD_BILLING_MODE=provider_api_key`**. With 1Claw secrets, the key can live in the vault
       at **`api-keys/openai`**, **`api-keys/gemini`**, etc. (the chat route sends **`vault://…`** as **`X-Shroud-Api-Key`**).
       Without 1Claw vault, use **`SHROUD_PROVIDER_API_KEY`** in `.env`.
+
+### HSM signing key provisioning
+
+When **1Claw Intents** is enabled (`--oneclaw-intents`), the CLI auto-provisions an **Ethereum signing key** in the HSM via `POST /v1/agents/:id/signing-keys`. The key is generated and stored inside the `__agent-keys` vault — never exposed. The CLI prints the derived address so you can fund it. 1Claw supports signing keys for 6 chains: Ethereum (secp256k1), Bitcoin (secp256k1), Solana (Ed25519), XRP (Ed25519), Cardano (Ed25519), Tron (secp256k1). Additional chains can be provisioned via the [1Claw dashboard](https://1claw.xyz) or SDK.
+
+### MCP server
+
+When 1Claw is selected (secrets or LLM), the scaffold generates **`.cursor/mcp.json`** with the [**@1claw/mcp**](https://www.npmjs.com/package/@1claw/mcp) server pre-configured. This gives AI agents in Cursor access to 44 MCP tools: vault secrets, Intents API (simulate, submit, sign), signing key management, treasury proposals, and execution intents. Only `ONECLAW_AGENT_API_KEY` is required — agent ID and vault are auto-discovered.
 
 ## LLM providers
 
@@ -223,16 +235,18 @@ When you choose **1Claw (1claw.xyz)**, the CLI:
 
 ### Shroud upstreams and default models
 
-Supported **`SHROUD_LLM_PROVIDER`** values match **`scaffold-agent --shroud-upstream`**: **`openai`**, **`anthropic`**, **`google`**, **`gemini`**, **`mistral`**, **`cohere`**, **`openrouter`**. The scaffold writes **`SHROUD_DEFAULT_MODEL`** into repo-root **`.env`** using this table; change it anytime (ids must be valid for that upstream and for [Shroud](https://docs.1claw.xyz/docs/guides/shroud); **OpenRouter** uses `provider/model` slugs from [openrouter.ai/models](https://openrouter.ai/models)).
+Supported **`SHROUD_LLM_PROVIDER`** values match **`scaffold-agent --shroud-upstream`**: **`openai`**, **`anthropic`**, **`google`**, **`gemini`**, **`mistral`**, **`cohere`**, **`openrouter`**, **`darkbloom`**, **`venice`**. The scaffold writes **`SHROUD_DEFAULT_MODEL`** into repo-root **`.env`** using this table; change it anytime (ids must be valid for that upstream and for [Shroud](https://docs.1claw.xyz/docs/guides/shroud); **OpenRouter** uses `provider/model` slugs from [openrouter.ai/models](https://openrouter.ai/models)).
 
 | `SHROUD_LLM_PROVIDER` | Default `SHROUD_DEFAULT_MODEL` |
 | --------------------- | ------------------------------ |
 | `openai` | `gpt-4o` |
-| `anthropic` | `claude-sonnet-4-20250514` |
-| `google` or `gemini` | `gemini-2.0-flash` |
+| `anthropic` | `claude-sonnet-4-6-20250217` |
+| `google` or `gemini` | `gemini-2.5-flash` |
 | `mistral` | `mistral-large-latest` |
-| `cohere` | `command-r-plus` |
+| `cohere` | `command-a-03-2025` |
 | `openrouter` | `openai/gpt-4o` |
+| `darkbloom` | `gpt-4o` |
+| `venice` | `llama-3.3-70b` |
 
 ### Direct LLM (Gemini / OpenAI / Anthropic, not Shroud)
 
@@ -242,9 +256,9 @@ When the app calls the provider SDK directly (vault **`llm-api-key`** or plain *
 | -------- | ------------- | -------- |
 | **Gemini** | `gemini-2.5-flash` | **`GOOGLE_GENERATIVE_AI_MODEL`** |
 | **OpenAI** | `gpt-4o` | No env var in the template — edit the generated chat route (`app/api/chat/route.ts` for Next.js, or the Vite `/api/chat` handler) to pass another model id. |
-| **Anthropic** | `claude-sonnet-4-20250514` | Same as OpenAI (edit the route). |
+| **Anthropic** | `claude-sonnet-4-6-20250217` | Same as OpenAI (edit the route). |
 
-All chat routes use the [Vercel AI SDK](https://sdk.vercel.ai/) for streaming. **Shroud + Google/Gemini upstream:** if **`SHROUD_BILLING_MODE=token_billing`**, chat uses **Shroud** for Gemini (no Google API key in your app) so **1Claw token billing** can apply — enable billing for the agent on [1claw.xyz](https://1claw.xyz). If a key **is** present (**`SHROUD_PROVIDER_API_KEY`**, **`GOOGLE_GENERATIVE_AI_API_KEY`**, or vault **`api-keys/google`** with **`ONECLAW_VAULT_ID`**), the route **prefers the direct Google Generative AI API** (better compatibility than some Shroud↔Gemini paths). With **`SHROUD_BILLING_MODE=provider_api_key`** and **no** Google key resolvable, the route returns **503** (BYOK required for that mode). **Direct** Google API default is **`gemini-2.5-flash`** (`GOOGLE_GENERATIVE_AI_MODEL`). **Shroud** path default for Gemini is **`gemini-2.0-flash`** (`SHROUD_DEFAULT_MODEL`) — token billing uses Stripe’s AI gateway, and unsupported model ids can return **404** with Stripe doc links in the error body. The generated chat route sends **`X-Shroud-Model`** (per [Shroud docs](https://docs.1claw.xyz/docs/guides/shroud)) as well as the JSON `model` field so the gateway picks the right id. See [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) for BYOK. Set **`SHROUD_DISABLE_GEMINI_DIRECT=1`** to always use Shroud `POST …/chat/completions` even when a Google key exists. **Other Shroud upstreams** use minimal non-streaming Shroud + `createDataStreamResponse` / `formatDataStreamPart` (or `pipeDataStreamToResponse` on Vite). **Do not** send `Authorization: Bearer …` to Shroud — use **`X-Shroud-Agent-Key`**. Optional: **`SHROUD_STREAM_CHUNK_CHARS`** (default `40`) for non-Gemini Shroud chunking.
+All chat routes use the [Vercel AI SDK](https://sdk.vercel.ai/) for streaming. **Shroud + Google/Gemini upstream:** if **`SHROUD_BILLING_MODE=token_billing`**, chat uses **Shroud** for Gemini (no Google API key in your app) so **1Claw token billing** can apply — enable billing for the agent on [1claw.xyz](https://1claw.xyz). If a key **is** present (**`SHROUD_PROVIDER_API_KEY`**, **`GOOGLE_GENERATIVE_AI_API_KEY`**, or vault **`api-keys/google`** with **`ONECLAW_VAULT_ID`**), the route **prefers the direct Google Generative AI API** (better compatibility than some Shroud↔Gemini paths). With **`SHROUD_BILLING_MODE=provider_api_key`** and **no** Google key resolvable, the route returns **503** (BYOK required for that mode). **Direct** Google API default is **`gemini-2.5-flash`** (`GOOGLE_GENERATIVE_AI_MODEL`). **Shroud** path default for Gemini is **`gemini-2.5-flash`** (`SHROUD_DEFAULT_MODEL`) — token billing uses Stripe’s AI gateway, and unsupported model ids can return **404** with Stripe doc links in the error body. The generated chat route sends **`X-Shroud-Model`** (per [Shroud docs](https://docs.1claw.xyz/docs/guides/shroud)) as well as the JSON `model` field so the gateway picks the right id. See [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) for BYOK. Set **`SHROUD_DISABLE_GEMINI_DIRECT=1`** to always use Shroud `POST …/chat/completions` even when a Google key exists. **Other Shroud upstreams** use minimal non-streaming Shroud + `createDataStreamResponse` / `formatDataStreamPart` (or `pipeDataStreamToResponse` on Vite). **Do not** send `Authorization: Bearer …` to Shroud — use **`X-Shroud-Agent-Key`**. Optional: **`SHROUD_STREAM_CHUNK_CHARS`** (default `40`) for non-Gemini Shroud chunking.
 
 ## Publishing to npm
 
@@ -271,6 +285,8 @@ This project builds on ideas and tooling from the Ethereum builder community:
   - [`@scaffold-ui/debug-contracts`](https://www.npmjs.com/package/@scaffold-ui/debug-contracts) — `<Contract>` widget powering the `/debug` page (read/write any deployed ABI).
 - **[BuidlGuidl](https://BuidlGuidl.com)** — education and builder tooling for the ecosystem.
 - **Burner wallet** — local dev wallet UX via **[burner-connector](https://github.com/scaffold-eth/burner-connector)** (Scaffold-ETH / BuidlGuidl–style), used when the generated app targets **localhost**.
+- **[1Claw](https://1claw.xyz)** — HSM-backed secret management, [Shroud](https://docs.1claw.xyz/docs/guides/shroud) TEE LLM proxy, [Intents API](https://docs.1claw.xyz/docs/guides/intents-api) (29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron), and [@1claw/mcp](https://www.npmjs.com/package/@1claw/mcp) (44 tools). SDK: [`@1claw/sdk`](https://www.npmjs.com/package/@1claw/sdk).
+- **[Ampersend](https://docs.ampersend.ai)** — x402 payments, A2A, and MCP for agent operations. SDK: [`@ampersend_ai/ampersend-sdk`](https://www.npmjs.com/package/@ampersend_ai/ampersend-sdk).
 
 ## Developer Documentation
 

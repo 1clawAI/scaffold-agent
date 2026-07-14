@@ -163,6 +163,32 @@ async function registerAgent(
   return parseAgentCreatedResponse(json);
 }
 
+/**
+ * POST /v1/agents/:id/signing-keys — provision an HSM-backed signing key.
+ * Human-only endpoint; keys are generated in the HSM and stored in __agent-keys vault.
+ */
+async function provisionSigningKey(
+  token: string,
+  agentId: string,
+  chain: string,
+): Promise<{ address: string; publicKey: string } | null> {
+  const res = await fetch(`${BASE_URL}/v1/agents/${agentId}/signing-keys`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ chain }),
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as Record<string, unknown>;
+  const data = (json.data ?? json) as Record<string, unknown>;
+  return {
+    address: String(data.address || ""),
+    publicKey: String(data.public_key || ""),
+  };
+}
+
 export async function setupOneClaw(
   apiKey: string,
   projectName: string,
@@ -238,5 +264,11 @@ export async function setupOneClaw(
     );
   }
 
-  return { vaultId, agentInfo };
+  let signingKeyAddress: string | undefined;
+  if (agentInfo && intents) {
+    const sk = await provisionSigningKey(token, agentInfo.id, "ethereum");
+    if (sk?.address) signingKeyAddress = sk.address;
+  }
+
+  return { vaultId, agentInfo, signingKeyAddress };
 }

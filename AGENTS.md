@@ -4,8 +4,9 @@ This repository is the **npm CLI** that **generates** onchain-agent monorepos (F
 
 ## Terminology
 
-- **1claw / 1Claw** — [1claw.xyz](https://1claw.xyz): vault, agents, **Shroud** LLM proxy ([Shroud docs](https://docs.1claw.xyz/docs/guides/shroud)).
+- **1claw / 1Claw** — [1claw.xyz](https://1claw.xyz): vault, agents, **Shroud** LLM proxy ([Shroud docs](https://docs.1claw.xyz/docs/guides/shroud)), **Intents API** ([1claw.xyz/intents](https://1claw.xyz/intents)) for HSM/TEE transaction signing across 29+ EVM chains plus Bitcoin, Solana, XRP, Cardano, and Tron.
 - **OpenClaw** — separate product ([openclaw.ai](https://openclaw.ai)); do not confuse with 1claw.
+- **@1claw/mcp** — MCP server with 44 tools for vault secrets, Intents API, signing keys, treasury, and execution intents.
 
 ## Build and verify
 
@@ -56,7 +57,7 @@ Full flag list: **`scaffold-agent --help`**.
 - **`--llm oneclaw`** with **`--secrets none`** (or non-oneclaw): set **`--oneclaw-agent-id`** and **`--oneclaw-agent-api-key`**.
 - **`--shroud-billing provider_api_key`**: set **`--shroud-provider-api-key`** (vault path vs `.env` depends on **`--secrets`**).
 
-Defaults under **`-y`** (see **`--help`**): e.g. Foundry, Next.js, 1Claw Shroud, **`token_billing`**, **`gemini-2.0-flash`** style Shroud defaults in generated env where applicable.
+Defaults under **`-y`** (see **`--help`**): e.g. Foundry, Next.js, 1Claw Shroud, **`token_billing`**, **`gemini-2.5-flash`** Shroud defaults in generated env where applicable.
 
 ## Code map
 
@@ -77,7 +78,7 @@ Defaults under **`-y`** (see **`--help`**): e.g. Foundry, Next.js, 1Claw Shroud,
 
 ### Pinned versions (generated Next/Vite)
 
-In **`src/actions/scaffold.ts`**: **`AMPERSEND_SDK_VERSION`** (`@ampersend_ai/ampersend-sdk`, when Ampersend is enabled), **`ONECLAW_SDK_VERSION`** (`@1claw/sdk`, when secrets or LLM is 1Claw), and **`SCAFFOLD_UI_*`** (`@scaffold-ui/hooks` / `components` / `debug-contracts` on Next.js). Bump those constants when releasing against new SDK/UI lines; then **`npm run build`**.
+In **`src/actions/scaffold.ts`**: **`AMPERSEND_SDK_VERSION`** (`@ampersend_ai/ampersend-sdk`, when Ampersend is enabled), **`ONECLAW_SDK_VERSION`** (`@1claw/sdk` — **0.41.2**, when secrets or LLM is 1Claw), and **`SCAFFOLD_UI_*`** (`@scaffold-ui/hooks` / `components` / `debug-contracts` on Next.js). Bump those constants when releasing against new SDK/UI lines; then **`npm run build`**.
 
 ## Editing templates
 
@@ -99,7 +100,7 @@ When **`secrets`** or **`llm`** is 1Claw, scaffolds include **`just reset`** to 
 - **`getActiveNetwork()`** (from `network-definitions.ts`) resolves `targetNetwork` to a `NetworkDefinition` with `rpcOverrides` applied.
 - **Agent on-chain tools** (`lib/agent-onchain-tools.ts`) default `chainId` and `chain` parameters to `getActiveNetwork()`, so the AI model doesn't need to guess the chain.
 - **`rpcOverrides`** (in `scaffold.config.ts`) are applied in both `getActiveNetwork()` and the agent tools helper `networkForChainId()` — any chain gets its RPC override, not just the active one.
-- **`ONECLAW_CHAIN_NAMES`** maps `chainId` → 1Claw slug (e.g. `8453 → "base"`); intent tools default to the active network's slug.
+- **`ONECLAW_CHAIN_NAMES`** maps `chainId` → 1Claw slug for all 29 EVM mainnets + testnets (e.g. `8453 → "base"`, `42161 → "arbitrum"`); intent tools default to the active network's slug.
 
 ### Network commands
 
@@ -115,11 +116,11 @@ Valid keys: `ethereum`, `base`, `sepolia`, `baseSepolia`, `polygon`, `bnb`, `loc
 
 | File | Change |
 |---|---|
-| `src/scaffold-templates/agent-onchain-tools.ts` | `getActiveNetwork` default, `rpcOverrides`-aware `networkForChainId`, `ONECLAW_CHAIN_NAMES` |
+| `src/scaffold-templates/agent-onchain-tools.ts` | `getActiveNetwork` default, `rpcOverrides`-aware `networkForChainId`, `ONECLAW_CHAIN_NAMES` (29 mainnets + testnets), sign-only/list-keys/list-txs tools |
 | `src/scaffold-templates/network-config.ts` | Re-exports `rpcOverrides` from `scaffold.config` |
 | `src/actions/project-scripts.ts` | `getCheckNetworkScript()` |
-| `src/actions/scaffold.ts` | `check-network` script, `use-network` / `check-network` justfile recipes, start precheck |
-| `src/actions/oneclaw.ts` | `shroud_enabled` in `registerAgent` body |
+| `src/actions/scaffold.ts` | `check-network` script, `use-network` / `check-network` justfile recipes, start precheck, `.cursor/mcp.json` generation |
+| `src/actions/oneclaw.ts` | `shroud_enabled` + `intents_api_enabled` in `registerAgent`, HSM signing key provisioning via `/v1/agents/:id/signing-keys` |
 
 ## Further reading
 

@@ -529,6 +529,16 @@ export async function promptShroudUpstreamProvider(): Promise<ShroudUpstreamProv
         name: "OpenRouter",
         description: "Many models with one key",
       },
+      {
+        value: "darkbloom" as const,
+        name: "Darkbloom",
+        description: "E2E encrypted Apple Silicon TEE",
+      },
+      {
+        value: "venice" as const,
+        name: "Venice AI",
+        description: "Zero-retention + optional TEE/E2EE",
+      },
     ],
   });
 }

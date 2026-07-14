@@ -31,12 +31,42 @@ function getOneclawAgentClient() {
   const oneclawChainMapBlock = includeOneclawSdk
     ? `
 const ONECLAW_CHAIN_NAMES: Record<number, string> = {
+  // Mainnets (29 EVM chains supported by 1Claw Intents API)
   1: "ethereum",
+  10: "optimism",
+  25: "cronos",
+  56: "bnb",
+  100: "gnosis",
+  137: "polygon",
+  146: "sonic",
+  250: "fantom",
+  324: "zksync",
+  480: "world-chain",
+  1088: "metis",
+  1101: "polygon-zkevm",
+  1284: "moonbeam",
+  1329: "sei",
+  5000: "mantle",
+  8217: "kaia",
   8453: "base",
+  34443: "mode",
+  42161: "arbitrum",
+  42170: "arbitrum-nova",
+  42220: "celo",
+  43114: "avalanche",
+  59144: "linea",
+  80094: "berachain",
+  81457: "blast",
+  167000: "taiko",
+  534352: "scroll",
+  7777777: "zora",
+  4663: "robinhood",
+  // Testnets
   11155111: "sepolia",
   84532: "base-sepolia",
-  137: "polygon",
-  56: "bnb",
+  5042002: "arc-testnet",
+  46630: "robinhood-testnet",
+  // Local
   31337: "localhost",
 };
 
@@ -127,6 +157,75 @@ function oneclawChainForActive(): string {
             simulate_first: simulate_first ?? true,
           },
         );
+        if (res.error) {
+          return { error: res.error.message, type: res.error.type };
+        }
+        return res.data;
+      },
+    }),
+    oneclaw_intent_sign_only: tool({
+      description:
+        "Sign an EVM transaction via 1Claw without broadcasting (BYORPC). Returns the raw signed_tx hex and tx_hash. Use for MEV protection, custom relayers, or manual broadcast. See https://1claw.xyz/intents",
+      parameters: z.object({
+        chain: z
+          .string()
+          .optional()
+          .describe("1Claw chain name. Defaults to active network."),
+        to: z.string().regex(/^0x[a-fA-F0-9]{40}$/i),
+        valueEther: z.string().describe("ETH value as a decimal string"),
+        data: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]*$/i)
+          .optional(),
+      }),
+      execute: async ({ chain, to, valueEther, data }) => {
+        const client = getOneclawAgentClient();
+        const agentId = (process.env.ONECLAW_AGENT_ID || "").trim();
+        if (!client || !agentId) {
+          return { error: "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY." };
+        }
+        const resolvedChain = chain || oneclawChainForActive();
+        const valueWei = parseEther(valueEther || "0").toString();
+        const res = await client.agents.signTransaction(agentId, {
+          chain: resolvedChain,
+          to,
+          value: valueWei,
+          data: data || "0x",
+        });
+        if (res.error) {
+          return { error: res.error.message, type: res.error.type };
+        }
+        return res.data;
+      },
+    }),
+    oneclaw_list_signing_keys: tool({
+      description:
+        "List the agent's HSM-backed signing keys (address, chain, status) provisioned via 1Claw.",
+      parameters: z.object({}),
+      execute: async () => {
+        const client = getOneclawAgentClient();
+        const agentId = (process.env.ONECLAW_AGENT_ID || "").trim();
+        if (!client || !agentId) {
+          return { error: "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY." };
+        }
+        const res = await client.signingKeys.list(agentId);
+        if (res.error) {
+          return { error: res.error.message, type: res.error.type };
+        }
+        return res.data;
+      },
+    }),
+    oneclaw_list_transactions: tool({
+      description:
+        "List recent 1Claw Intents transactions for this agent (tx_hash, chain, status, value).",
+      parameters: z.object({}),
+      execute: async () => {
+        const client = getOneclawAgentClient();
+        const agentId = (process.env.ONECLAW_AGENT_ID || "").trim();
+        if (!client || !agentId) {
+          return { error: "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY." };
+        }
+        const res = await client.agents.listTransactions(agentId);
         if (res.error) {
           return { error: res.error.message, type: res.error.type };
         }
@@ -232,7 +331,7 @@ ${oneclawClientFn}${oneclawChainMapBlock}
 /**
  * Preset tools for the chat route: read deployed ABIs and eth_call via viem.${
     includeOneclawSdk
-      ? " When ONECLAW_AGENT_ID and ONECLAW_AGENT_API_KEY are set, also exposes 1Claw Intents (simulate + submit). See https://1claw.xyz/intents"
+      ? " When ONECLAW_AGENT_ID and ONECLAW_AGENT_API_KEY are set, also exposes 1Claw Intents (simulate, submit, sign-only, list keys/txs). Supports 29+ EVM chains plus non-EVM. See https://1claw.xyz/intents"
       : ""
   }
  */

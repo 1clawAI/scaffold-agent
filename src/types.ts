@@ -11,7 +11,9 @@ export type ShroudUpstreamProvider =
   | "gemini"
   | "mistral"
   | "cohere"
-  | "openrouter";
+  | "openrouter"
+  | "darkbloom"
+  | "venice";
 
 /** How Shroud pays upstream LLM providers — user-declared during setup */
 export type ShroudBillingMode = "token_billing" | "provider_api_key";
@@ -52,6 +54,8 @@ export interface DeployerConfig {
 export interface OneClawResult {
   vaultId: string;
   agentInfo?: { id: string; apiKey: string };
+  /** HSM-provisioned Ethereum signing key address (when Intents enabled). */
+  signingKeyAddress?: string;
 }
 
 export interface ScaffoldConfig {

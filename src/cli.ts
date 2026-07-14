@@ -94,7 +94,7 @@ LLM:
   --llm-api-key <key>         Third-party LLM key (when --llm is not oneclaw; optional)
 
 Shroud (only when --llm oneclaw):
-  --shroud-upstream <id>      openai | anthropic | google | gemini | mistral | cohere | openrouter
+  --shroud-upstream <id>      openai | anthropic | google | gemini | mistral | cohere | openrouter | darkbloom | venice
   --shroud-billing <mode>     token_billing | provider_api_key
   --shroud-provider-api-key   Upstream API key for provider_api_key mode (vault or .env)
   --oneclaw-agent-id <uuid>   Required with -y when --secrets is not oneclaw and --llm oneclaw
@@ -170,6 +170,10 @@ function defaultShroudModel(upstream: ShroudUpstreamProvider): string {
       return "command-a-03-2025";
     case "openrouter":
       return "openai/gpt-4o";
+    case "darkbloom":
+      return "gpt-4o";
+    case "venice":
+      return "llama-3.3-70b";
   }
 }
 
@@ -499,6 +503,12 @@ async function main() {
           info(
             "1Claw Intents is enabled for this agent — https://1claw.xyz/intents (set allowlists and caps in the dashboard).",
           );
+          if (result.signingKeyAddress) {
+            keyValue("HSM signing key (ethereum)", result.signingKeyAddress);
+            info(
+              "An Ethereum signing key was auto-provisioned in the HSM. Fund this address to send transactions via Intents.",
+            );
+          }
         }
       }
       info(
