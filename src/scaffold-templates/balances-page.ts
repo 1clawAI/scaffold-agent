@@ -6,20 +6,12 @@ export type BalancesPageFramework = "next" | "vite";
 
 export function balancesPageSource(framework: BalancesPageFramework): string {
   const useClient = framework === "next" ? `"use client";\n\n` : "";
-  const linkImport =
-    framework === "next"
-      ? `import Link from "next/link";`
-      : `import { Link } from "react-router-dom";`;
-  const lp = (path: string) =>
-    framework === "next" ? `href="${path}"` : `to="${path}"`;
   return `${useClient}import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Wallet } from "lucide-react";
+import { Loader2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { useAccount } from "wagmi";
 import { getActiveNetwork } from "@/lib/networks";
 import { useEffectiveAgentAddress } from "@/lib/agent-swarm";
-${linkImport}
 
 type BalanceRow = { symbol: string; balance: string; decimals: number; address?: string };
 
@@ -158,25 +150,17 @@ export default function BalancesPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 flex-wrap sticky top-0 z-40">
-        <Link
-          ${lp("/")}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
-          title="Back to chat"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
           <Wallet className="h-4 w-4 text-primary" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div>
           <h1 className="text-sm font-semibold">Balances</h1>
           <p className="text-xs text-muted-foreground">
             Active network: {net.name} ({net.chainId})
           </p>
         </div>
-        <ConnectWalletButton />
-      </header>
+      </div>
 
       <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-6">
         <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">

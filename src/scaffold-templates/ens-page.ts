@@ -25,12 +25,11 @@ export function ensPageSource(
       : `(import.meta.env.VITE_AGENT_ADDRESS || "").trim()`;
 
   return `${useClient}import { useMemo, useState } from "react";
-import { ArrowLeft, BadgeCheck, Check, Copy, ExternalLink } from "lucide-react";
+import { BadgeCheck, Check, Copy, ExternalLink } from "lucide-react";
 import { isAddress } from "viem";
 import { mainnet } from "wagmi/chains";
 import { useAccount, useEnsName } from "wagmi";
 import { Button } from "@/components/ui/button";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 ${linkImport}
 
 function CopyBtn({ text }: { text: string }) {
@@ -85,26 +84,18 @@ export default function EnsPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 flex-wrap sticky top-0 z-40">
-        <Link
-          ${lp("/")}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
-          title="Back to chat"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
           <BadgeCheck className="h-4 w-4 text-primary" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div>
           <h1 className="text-sm font-semibold">ENS for your agent</h1>
           <p className="text-xs text-muted-foreground">
             Names and subnames for{" "}
             <span className="font-medium text-foreground">${projectName}</span>
           </p>
         </div>
-        <ConnectWalletButton />
-      </header>
+      </div>
 
       <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-8">
         <p className="text-sm text-muted-foreground">

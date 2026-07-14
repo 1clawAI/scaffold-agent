@@ -1817,6 +1817,79 @@ export async function POST(req: Request) {
 `;
 }
 
+function headerComponentSource(projectName: string): string {
+  return `"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Bot, Wallet, BadgeCheck, Info, Users, Bug, MessageSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { LocalFaucetButton } from "@/components/LocalFaucetButton";
+import { SwarmAgentPicker } from "@/lib/agent-swarm";
+
+const NAV_ITEMS = [
+  { href: "/", label: "Chat", icon: MessageSquare },
+  { href: "/balances", label: "Balances", icon: Wallet },
+  { href: "/ens", label: "ENS", icon: BadgeCheck },
+  { href: "/identity", label: "Identity", icon: Info },
+  { href: "/swarm", label: "Swarm", icon: Users },
+  { href: "/debug", label: "Debug", icon: Bug },
+];
+
+export function Header() {
+  const pathname = usePathname();
+
+  return (
+    <header
+      className="border-b border-border bg-card/80 backdrop-blur-sm px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-40"
+      role="banner"
+    >
+      <Link href="/" className="flex items-center gap-2.5 shrink-0">
+        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+          <Bot className="h-4 w-4 text-primary-foreground" aria-hidden />
+        </div>
+        <div className="hidden sm:block">
+          <p className="text-sm font-semibold tracking-tight leading-tight">${projectName}</p>
+          <p className="text-[10px] text-muted-foreground leading-tight">Onchain AI Agent</p>
+        </div>
+      </Link>
+
+      <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-thin" aria-label="Main navigation">
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
+                active
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
+              aria-current={active ? "page" : undefined}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden md:inline">{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        <LocalFaucetButton />
+        <SwarmAgentPicker className="hidden sm:flex shrink-0" />
+        <ConnectWalletButton />
+      </div>
+    </header>
+  );
+}
+`;
+}
+
 function localFaucetButtonSource(): string {
   return `"use client";
 
@@ -1936,116 +2009,15 @@ export function LocalFaucetButton() {
 
 function chatPageContent(
   projectName: string,
-  options?: {
-    debugLink?: boolean;
-    identityLink?: boolean;
-    linkFramework?: "next" | "react-router";
-  },
+  options?: { debugLink?: boolean; linkFramework?: "next" | "react-router" },
 ): string {
-  const linkFramework = options?.linkFramework ?? "next";
-  const debugLink =
-    options?.debugLink !== undefined
-      ? options.debugLink
-      : linkFramework === "next";
-  const identityLink = options?.identityLink !== false;
-  const needLink = identityLink || debugLink;
-  const linkImports = !needLink
-    ? ""
-    : linkFramework === "next"
-      ? `import Link from "next/link";\n`
-      : `import { Link } from "react-router-dom";\n`;
-  const cnImport = needLink ? `import { cn } from "@/lib/utils";\n` : "";
-  const lucideParts = ["SendHorizontal", "Bot", "User"];
-  if (identityLink) lucideParts.push("BadgeCheck", "Info", "Wallet", "Users");
-  if (debugLink) lucideParts.push("Bug");
-  const lucideIcons = `import { ${lucideParts.join(", ")} } from "lucide-react";`;
-  const lp = (path: string) =>
-    linkFramework === "next" ? `href="${path}"` : `to="${path}"`;
-  const iconBtnClass = `cn(
-            "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-            "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-          )`;
-  const localFaucetImport = identityLink
-    ? `import { LocalFaucetButton } from "@/components/LocalFaucetButton";\n`
-    : "";
-  const swarmPickerImport = identityLink
-    ? `import { SwarmAgentPicker } from "@/lib/agent-swarm";\n`
-    : "";
-  const headerFaucet = identityLink
-    ? `
-        <LocalFaucetButton />`
-    : "";
-  const headerBalances = identityLink
-    ? `
-        <Link
-          ${lp("/balances")}
-          className={${iconBtnClass}}
-          title="Balances"
-          aria-label="Balances"
-        >
-          <Wallet className="h-4 w-4" aria-hidden />
-        </Link>`
-    : "";
-  const headerEns = identityLink
-    ? `
-        <Link
-          ${lp("/ens")}
-          className={${iconBtnClass}}
-          title="ENS name for your agent"
-          aria-label="ENS name for your agent"
-        >
-          <BadgeCheck className="h-4 w-4" aria-hidden />
-        </Link>`
-    : "";
-  const headerIdentity = identityLink
-    ? `
-        <Link
-          ${lp("/identity")}
-          className={${iconBtnClass}}
-          title="Agent identity (ERC-8004)"
-          aria-label="Agent identity (ERC-8004)"
-        >
-          <Info className="h-4 w-4" aria-hidden />
-        </Link>`
-    : "";
-  const headerSwarm = identityLink
-    ? `
-        <Link
-          ${lp("/swarm")}
-          className={${iconBtnClass}}
-          title="Swarm agents"
-          aria-label="Swarm agents"
-        >
-          <Users className="h-4 w-4" aria-hidden />
-        </Link>`
-    : "";
-  const headerBug = debugLink
-    ? `
-        <Link
-          ${lp("/debug")}
-          className={${iconBtnClass}}
-          title="Debug contracts"
-          aria-label="Debug contracts"
-        >
-          <Bug className="h-4 w-4" aria-hidden />
-        </Link>`
-    : "";
-  const headerIcons = `${headerFaucet}${headerBalances}${headerEns}${headerIdentity}${headerSwarm}${headerBug}`;
-  const headerRight = `
-        <div className="flex items-center gap-2 shrink-0">
-          ${headerIcons ? `<div className="flex items-center gap-1">${headerIcons}</div>` : ""}
-          ${identityLink ? `<SwarmAgentPicker className="hidden sm:flex shrink-0" />` : ""}
-          <ConnectWalletButton />
-        </div>`;
-
   return `"use client";
 
-${linkImports}${localFaucetImport}${swarmPickerImport}import { useChat } from "ai/react";
+import { useChat } from "ai/react";
 import { useEffect, useRef } from "react";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-${cnImport}${lucideIcons}
+import { SendHorizontal, Bot, User } from "lucide-react";
 
 export default function Home() {
   const { messages, input, handleInputChange, handleSubmit, isLoading, error } =
@@ -2061,20 +2033,7 @@ export default function Home() {
   }, [messages, isLoading]);
 
   return (
-    <div className="flex flex-col h-screen">
-      <header
-        className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-3 sticky top-0 z-40"
-        role="banner"
-      >
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-          <Bot className="h-4 w-4 text-primary-foreground" aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-semibold tracking-tight">${projectName}</h1>
-          <p className="text-xs text-muted-foreground">Onchain AI Agent</p>
-        </div>${headerRight}
-      </header>
-
+    <div className="flex flex-col" style={{ height: "calc(100vh - 49px)" }}>
       {error &&
         (() => {
           const raw = error.message;
@@ -2263,11 +2222,9 @@ export default function Home() {
 function debugPageContent(): string {
   return `"use client";
 
-import Link from "next/link";
-import { ArrowLeft, Bug, Fingerprint } from "lucide-react";
+import { Bug } from "lucide-react";
 import type { Abi, Address } from "viem";
 import { Contract } from "@scaffold-ui/debug-contracts";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import deployedContracts from "@/contracts/deployedContracts";
 import { NETWORKS, type NetworkDefinition } from "@/lib/networks";
 
@@ -2289,23 +2246,14 @@ export default function DebugPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 sticky top-0 z-40">
-        <Link
-          href="/"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
-          title="Back to chat"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
           <Bug className="h-4 w-4 text-primary" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div>
           <h1 className="text-sm font-semibold">Debug contracts</h1>
           <p className="text-xs text-muted-foreground">
-            Deployed addresses &amp; ABI from{" "}
-            <code className="text-xs bg-muted px-1 rounded">deployedContracts.ts</code>{" "}
-            via{" "}
+            Deployed addresses &amp; ABI via{" "}
             <a
               href="https://github.com/scaffold-eth/scaffold-ui"
               className="underline hover:text-foreground"
@@ -2316,15 +2264,7 @@ export default function DebugPage() {
             </a>
           </p>
         </div>
-        <Link
-          href="/identity"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
-          title="Agent identity (ERC-8004)"
-        >
-          <Fingerprint className="h-4 w-4" />
-        </Link>
-        <ConnectWalletButton />
-      </header>
+      </div>
 
       <main className="flex-1 py-8 max-w-7xl mx-auto w-full space-y-10 px-4 lg:px-10">
         {entries.length === 0 ? (
@@ -3117,6 +3057,7 @@ module.exports = nextConfig;
   file(pkg, "lib/web3-providers.tsx", web3ProvidersSource("next"));
   file(pkg, "components/ConnectWalletButton.tsx", connectWalletButtonSource());
   file(pkg, "components/LocalFaucetButton.tsx", localFaucetButtonSource());
+  file(pkg, "components/Header.tsx", headerComponentSource(config.projectName));
   file(
     pkg,
     "lib/node-builtins-browser-stub.cjs",
@@ -3188,6 +3129,7 @@ module.exports = function stubPinoPretty() {
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { Header } from "@/components/Header";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -3208,6 +3150,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           >
             Skip to main content
           </a>
+          <Header />
           <div id="site-main" className="min-h-screen">
             {children}
           </div>

@@ -178,19 +178,12 @@ export function SwarmAgentPicker({ className }: { className?: string }) {
 
 export function swarmPageSource(framework: AgentSwarmTemplateFramework): string {
   const useClient = framework === "next" ? `"use client";\n\n` : "";
-  const linkImport =
-    framework === "next"
-      ? `import Link from "next/link";`
-      : `import { Link } from "react-router-dom";`;
-  const lp = (path: string) =>
-    framework === "next" ? `href="${path}"` : `to="${path}"`;
 
   return `${useClient}import { useCallback, useMemo, useState } from "react";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Users, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAgentSwarm } from "@/lib/agent-swarm";
-${linkImport}
 
 export default function SwarmPage() {
   const { roster } = useAgentSwarm();
@@ -213,22 +206,18 @@ export default function SwarmPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 flex-wrap sticky top-0 z-40">
-        <Link
-          ${lp("/")}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent text-muted-foreground"
-          title="Back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="min-w-0 flex-1">
+      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Users className="h-4 w-4 text-primary" />
+        </div>
+        <div>
           <h1 className="text-sm font-semibold tracking-tight">Swarm</h1>
           <p className="text-xs text-muted-foreground">
             On-chain agent wallets — add more with{" "}
             <code className="rounded bg-muted px-1">just swarm agents=N</code>
           </p>
         </div>
-      </header>
+      </div>
 
       <main className="flex-1 p-6 max-w-lg mx-auto w-full space-y-6">
         <section className="rounded-lg border border-border bg-card p-5 space-y-3">
