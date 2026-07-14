@@ -74,9 +74,9 @@ const SCAFFOLD_UI_DEBUG_CONTRACTS_VERSION = "0.1.9";
 
 /** Appended to chat system prompts where AI SDK `tools` are wired (Next `/api/chat`). */
 const CHAT_SYSTEM_TOOLS_SUFFIX =
-  " You have server tools (list_deployed_contracts, contract_read) for this repo's deployed contracts and RPC; prefer them over guessing addresses or ABIs.";
+  " You have server tools (list_project_addresses, get_wallet_balance, resolve_ens, lookup_erc8004_agents, list_deployed_contracts, contract_read) for wallet balances, ENS, ERC-8004 identity, deployed contracts, and RPC reads. For balance questions use list_project_addresses then get_wallet_balance (defaults to agent wallet). Prefer tools over guessing addresses or ABIs.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
-  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit / oneclaw_intent_sign_only, those call 1Claw Intents API (HSM/TEE signing across 29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron; https://1claw.xyz/intents). Signing keys never leave the HSM. Never submit high-value txs without explicit user confirmation. Use oneclaw_list_signing_keys to check available keys.";
+  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit / oneclaw_intent_sign_only, those call 1Claw Intents API (HSM/TEE signing across 29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron; https://1claw.xyz/intents). Signing keys never leave the HSM. Never submit high-value txs without explicit user confirmation. Use oneclaw_list_signing_keys and oneclaw_check_signing_balances for HSM key addresses and balances.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
   " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
 
@@ -1236,6 +1236,9 @@ const SHADCN_CSS = `@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@import "@scaffold-ui/components/styles.css";
+@import "@scaffold-ui/debug-contracts/styles.css";
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -1294,6 +1297,30 @@ const SHADCN_CSS = `@tailwind base;
   .scrollbar-thin::-webkit-scrollbar { width: 6px; }
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+
+  /* Scaffold UI (/debug): readable inputs on our dark theme */
+  .dark,
+  .dark * {
+    --color-sui-base-100: hsl(240 12% 10%);
+    --color-sui-primary-content: hsl(0 0% 95%);
+    --color-sui-base-content: hsl(0 0% 95%);
+    --color-sui-input-background: hsl(240 15% 6%);
+    --color-sui-input-text: hsl(0 0% 95%);
+    --color-sui-input-border: hsl(240 5% 22%);
+    --color-sui-input-border-disabled: hsl(240 5% 16%);
+    --color-sui-primary: hsl(0 72% 51%);
+    --color-sui-primary-subtle: hsl(240 5% 14%);
+    --color-sui-primary-neutral: hsl(240 12% 9%);
+    --color-sui-accent: hsl(0 72% 51%);
+    --color-sui-skeleton-base: hsl(240 5% 14%);
+    --color-sui-skeleton-highlight: hsl(240 5% 18%);
+  }
+
+  .scaffold-ui-debug input::placeholder,
+  .scaffold-ui-debug textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
 }
 `;
 
@@ -1354,6 +1381,7 @@ export default config;
 
 const POSTCSS_CONFIG = `export default {
   plugins: {
+    "postcss-import": {},
     tailwindcss: {},
     autoprefixer: {},
   },
@@ -2132,8 +2160,8 @@ export default function Home() {
               {[
                 "What contracts are deployed?",
                 "Check my wallet balance",
+                "Resolve vitalik.eth",
                 "Read a contract function",
-                "Help me send a transaction",
               ].map((prompt) => (
                 <button
                   key={prompt}
@@ -2266,7 +2294,7 @@ export default function DebugPage() {
         </div>
       </div>
 
-      <main className="flex-1 py-8 max-w-7xl mx-auto w-full space-y-10 px-4 lg:px-10">
+      <main className="flex-1 py-8 max-w-7xl mx-auto w-full space-y-10 px-4 lg:px-10 scaffold-ui-debug" data-theme="dark">
         {entries.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground space-y-2">
             <p>No deployed contracts in <code className="bg-muted px-1 rounded">deployedContracts.ts</code> yet.</p>
@@ -2278,7 +2306,7 @@ export default function DebugPage() {
             const explorer = blockExplorerForChain(chainId);
             return (
               <section key={chainIdStr} className="space-y-8">
-                <h2 className="text-lg font-semibold">Chain {chainIdStr}</h2>
+                <h2 className="text-lg font-semibold text-foreground">Chain {chainIdStr}</h2>
                 {Object.entries(contracts).map(([name, meta]) => (
                   <Contract
                     key={name}
@@ -2885,6 +2913,7 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
           "@types/node": "^22.0.0",
           tailwindcss: "^3.4.0",
           postcss: "^8.4.0",
+          "postcss-import": "^16.0.0",
           autoprefixer: "^10.4.0",
         },
       },
@@ -3687,6 +3716,7 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
           vite: "^6.0.0",
           tailwindcss: "^3.4.0",
           postcss: "^8.4.0",
+          "postcss-import": "^16.0.0",
           autoprefixer: "^10.4.0",
           express: "^4.21.0",
           dotenv: "^16.4.0",

@@ -77,6 +77,166 @@ function oneclawChainForActive(): string {
 `
     : "";
 
+  const walletEnsToolsBlock = `,
+    list_project_addresses: tool({
+      description:
+        "List configured project wallet addresses from .env (agent + deployer). Use before get_wallet_balance when the user says 'my wallet'.",
+      parameters: z.object({}),
+      execute: async () => {
+        const addrs = getProjectAddresses();
+        return {
+          activeChainId: active.chainId,
+          activeNetwork: active.key,
+          ...addrs,
+        };
+      },
+    }),
+    get_wallet_balance: tool({
+      description:
+        "Get native currency and configured ERC-20 token balances for an address on a scaffold network. Defaults to the agent wallet, then deployer. Use for 'check my balance' requests.",
+      parameters: z.object({
+        address: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]{40}$/i)
+          .optional()
+          .describe("Explicit 0x address. Overrides wallet."),
+        wallet: z
+          .enum(["agent", "deployer"])
+          .optional()
+          .describe("Project wallet from .env when address is omitted."),
+        chainId: z
+          .number()
+          .optional()
+          .describe("EVM chain id. Defaults to active network in scaffold.config."),
+      }),
+      execute: async ({ address, wallet, chainId }) => {
+        const resolvedChainId = chainId ?? active.chainId;
+        let target = address;
+        if (!target) {
+          const addrs = getProjectAddresses();
+          if (wallet === "deployer") target = addrs.deployerAddress ?? undefined;
+          else if (wallet === "agent") target = addrs.agentAddress ?? undefined;
+          else target = addrs.agentAddress ?? addrs.deployerAddress ?? undefined;
+        }
+        if (!target) {
+          return {
+            error:
+              "No address — set AGENT_ADDRESS or DEPLOYER_ADDRESS in .env, or pass address.",
+          };
+        }
+        return fetchWalletBalances(target as Address, resolvedChainId);
+      },
+    }),
+    resolve_ens: tool({
+      description:
+        "Resolve ENS names to addresses or reverse-resolve addresses to .eth names on Ethereum mainnet.",
+      parameters: z.object({
+        name: z
+          .string()
+          .optional()
+          .describe("ENS name, e.g. vitalik.eth"),
+        address: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]{40}$/i)
+          .optional()
+          .describe("Address for reverse ENS lookup"),
+      }),
+      execute: async ({ name, address }) => {
+        if (!name && !address) {
+          return { error: "Provide name (forward) or address (reverse)." };
+        }
+        try {
+          if (name) {
+            const normalized = normalize(name);
+            const resolved = await getEnsAddress(ensPublicClient, { name: normalized });
+            return { name: normalized, address: resolved };
+          }
+          const ensName = await getEnsName(ensPublicClient, {
+            address: address as Address,
+          });
+          return { address, name: ensName };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { error: msg };
+        }
+      },
+    }),
+    lookup_erc8004_agents: tool({
+      description:
+        "Search the ERC-8004 agent registry (Agent0) for agents owned by project wallets on the active network.",
+      parameters: z.object({
+        address: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]{40}$/i)
+          .optional()
+          .describe("Owner address; defaults to agent + deployer from .env"),
+      }),
+      execute: async ({ address }) => {
+        const owners: string[] = [];
+        if (address) {
+          owners.push(address);
+        } else {
+          const addrs = getProjectAddresses();
+          if (addrs.agentAddress) owners.push(addrs.agentAddress);
+          if (addrs.deployerAddress) owners.push(addrs.deployerAddress);
+        }
+        if (owners.length === 0) {
+          return { error: "No owner address — pass address or set AGENT_ADDRESS / DEPLOYER_ADDRESS." };
+        }
+        try {
+          const { SDK } = await import("agent0-sdk");
+          const sdk = new SDK({
+            chainId: active.chainId,
+            rpcUrl: active.rpcUrl,
+          });
+          const agents = await sdk.searchAgents({
+            owners,
+            chains: [active.chainId],
+          });
+          return { chainId: active.chainId, owners, agents };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { error: msg };
+        }
+      },
+    })`;
+
+  const oneclawSigningBalanceTool = includeOneclawSdk
+    ? `,
+    oneclaw_check_signing_balances: tool({
+      description:
+        "List 1Claw HSM signing keys and their on-chain native + token balances on the active network.",
+      parameters: z.object({}),
+      execute: async () => {
+        const client = getOneclawAgentClient();
+        const agentId = (process.env.ONECLAW_AGENT_ID || "").trim();
+        if (!client || !agentId) {
+          return { error: "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY." };
+        }
+        const res = await client.signingKeys.list(agentId);
+        if (res.error) {
+          return { error: res.error.message, type: res.error.type };
+        }
+        const keys = (res.data as { signing_keys?: { address?: string; chain?: string }[] })
+          ?.signing_keys;
+        if (!Array.isArray(keys) || keys.length === 0) {
+          return { activeChainId: active.chainId, signingKeys: [] };
+        }
+        const signingKeys = [];
+        for (const key of keys) {
+          const addr = key.address;
+          if (typeof addr === "string" && /^0x[a-fA-F0-9]{40}$/i.test(addr)) {
+            const balance = await fetchWalletBalances(addr as Address, active.chainId);
+            signingKeys.push({ ...key, balance });
+          } else {
+            signingKeys.push({ ...key, balance: { error: "No valid address on key" } });
+          }
+        }
+        return { activeChainId: active.chainId, signingKeys };
+      },
+    })`
+    : "";
+
   const oneclawToolsBlock = includeOneclawSdk
     ? `,
     oneclaw_intent_simulate: tool({
@@ -231,7 +391,7 @@ function oneclawChainForActive(): string {
         }
         return res.data;
       },
-    })`
+    })${oneclawSigningBalanceTool}`
     : "";
 
   const ampersendToolsBlock = includeAmpersend
@@ -295,9 +455,14 @@ import {
   createPublicClient,
   http,
   parseEther,
+  formatUnits,
+  erc20Abi,
   type Abi,
   type Address,
 } from "viem";
+import { getEnsAddress, getEnsName } from "viem/actions";
+import { normalize } from "viem/ens";
+import { mainnet } from "viem/chains";
 import deployedContracts from "@/contracts/deployedContracts";
 import { getActiveNetwork, NETWORKS, rpcOverrides, type NetworkDefinition } from "@/lib/networks";
 import { viemChainForNetwork } from "@repo/viem-chain";
@@ -326,6 +491,69 @@ function getContractMeta(chainId: number, contractName: string) {
     };
   }
   return { meta: { address: meta.address as Address, abi: meta.abi } };
+}
+
+const ensPublicClient = createPublicClient({
+  chain: mainnet,
+  transport: http("https://ethereum.publicnode.com"),
+});
+
+function getProjectAddresses() {
+  const agent = (process.env.AGENT_ADDRESS || process.env.NEXT_PUBLIC_AGENT_ADDRESS || "").trim();
+  const deployer = (process.env.DEPLOYER_ADDRESS || "").trim();
+  const hex = /^0x[a-fA-F0-9]{40}$/i;
+  return {
+    agentAddress: agent && hex.test(agent) ? agent : null,
+    deployerAddress: deployer && hex.test(deployer) ? deployer : null,
+  };
+}
+
+async function fetchWalletBalances(address: Address, chainId: number) {
+  const net = networkForChainId(chainId);
+  if (!net) {
+    return { error: \`chainId \${chainId} is not in scaffold NETWORKS — add it or switch targetNetwork.\` };
+  }
+  const client = createPublicClient({
+    chain: viemChainForNetwork(net),
+    transport: http(net.rpcUrl),
+  });
+  try {
+    const wei = await client.getBalance({ address });
+    const nativeFormatted = formatUnits(wei, net.nativeCurrency.decimals);
+    const contracts = net.tokens.map((t) => ({
+      address: t.address as Address,
+      abi: erc20Abi,
+      functionName: "balanceOf" as const,
+      args: [address] as const,
+    }));
+    const tokens: { symbol: string; balance: string; decimals: number; address: string }[] = [];
+    if (contracts.length) {
+      const results = await client.multicall({ contracts, allowFailure: true });
+      results.forEach((r, i) => {
+        const t = net.tokens[i];
+        tokens.push({
+          symbol: t.symbol,
+          balance: r.status === "success" ? formatUnits(r.result as bigint, t.decimals) : "0",
+          decimals: t.decimals,
+          address: t.address,
+        });
+      });
+    }
+    return {
+      address,
+      chainId,
+      network: net.key,
+      native: {
+        symbol: net.nativeCurrency.symbol,
+        balance: nativeFormatted,
+        decimals: net.nativeCurrency.decimals,
+      },
+      tokens,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg, address, chainId, network: net.key };
+  }
 }
 ${oneclawClientFn}${oneclawChainMapBlock}
 /**
@@ -415,7 +643,7 @@ export function buildAgentOnchainTools() {
           return { error: msg };
         }
       },
-    })${oneclawToolsBlock}${ampersendToolsBlock},
+    })${walletEnsToolsBlock}${oneclawToolsBlock}${ampersendToolsBlock},
   };
 }
 `;

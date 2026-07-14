@@ -28,6 +28,7 @@ import {
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { rainbowkitBurnerWallet } from "burner-connector";
+import { http } from "viem";
 import { getActiveNetwork, targetNetwork } from "./networks";
 import {
   bsc,
@@ -75,7 +76,11 @@ export const wagmiConfig = getDefaultConfig({
   appName: ${JSON.stringify(projectName)},
   projectId: projectId || DEFAULT_REOWN_PROJECT_ID,
   chains: [hardhat, sepolia, baseSepolia, base, mainnet, polygon, bsc],
-  ssr: ${framework === "next" ? "true" : "false"},
+  ssr: false,
+  transports: {
+    /** Reliable mainnet RPC for Scaffold UI USD price reads (Balance / EtherInput). */
+    [mainnet.id]: http("https://ethereum.publicnode.com"),
+  },
   wallets: [
     {
       groupName: "Popular",
@@ -131,22 +136,32 @@ import { AgentSwarmProvider } from "./agent-swarm";`;
       ? "          {children}\n"
       : "          <AgentSwarmProvider>{children}</AgentSwarmProvider>\n";
 
-  return `${useClient}import type { ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
-import { WagmiProvider } from "wagmi";
-${wagmiImport}
-import "@rainbow-me/rainbowkit/styles.css";
+  const rainbowKitGate =
+    framework === "next"
+      ? `
+/** RainbowKit's transaction store requires a viem public client on first paint. */
+function RainbowKitGate({ children }: { children: ReactNode }) {
+  const publicClient = usePublicClient();
+  if (!publicClient) return <>{children}</>;
+  return (
+    <RainbowKitProvider theme={darkTheme()} modalSize="compact">
+      <BurnerAutoConnect />
+      {children}
+    </RainbowKitProvider>
+  );
+}
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-    },
-  },
-});
-
+export function Web3Providers({ children }: { children: ReactNode }) {
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitGate>{children}</RainbowKitGate>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
+}
+`
+      : `
 export function Web3Providers({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
@@ -159,14 +174,36 @@ ${inner}        </RainbowKitProvider>
   );
 }
 `;
+
+  return `${useClient}import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
+import { WagmiProvider${framework === "next" ? ", usePublicClient" : ""} } from "wagmi";
+${wagmiImport}
+import "@rainbow-me/rainbowkit/styles.css";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+  },
+});
+${framework === "next" ? rainbowKitGate : rainbowKitGate}`;
 }
 
 export function nextAppProvidersSource(): string {
   return `"use client";
 
+import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
-import { Web3Providers } from "@/lib/web3-providers";
 import { AgentSwarmProvider } from "@/lib/agent-swarm";
+
+const Web3Providers = dynamic(
+  () => import("@/lib/web3-providers").then((m) => m.Web3Providers),
+  { ssr: false },
+);
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -182,9 +219,20 @@ export function connectWalletButtonSource(): string {
   return `"use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { usePublicClient } from "wagmi";
 import { cn } from "@/lib/utils";
 
 export function ConnectWalletButton() {
+  const publicClient = usePublicClient();
+  if (!publicClient) {
+    return (
+      <div
+        className="h-9 w-28 shrink-0 animate-pulse rounded-md bg-muted"
+        aria-hidden
+      />
+    );
+  }
+
   return (
     <ConnectButton.Custom>
       {({
