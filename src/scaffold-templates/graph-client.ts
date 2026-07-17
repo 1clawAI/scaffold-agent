@@ -300,17 +300,18 @@ export async function searchSubgraphs(
 
   const seen = new Set<string>();
   const results: { id: string; displayName: string; description: string }[] = [];
-  for (const s of json.data?.subgraphs ?? []) {
+  const deprioritized: typeof results = [];
+  for (const s of [...(json.data?.subgraphs ?? []), ...(json.data?.broader ?? [])]) {
     if (seen.has(s.id)) continue;
     seen.add(s.id);
-    results.push({ id: s.id, displayName: s.metadata?.displayName || s.id, description: s.metadata?.description || "" });
+    const entry = { id: s.id, displayName: s.metadata?.displayName || s.id, description: s.metadata?.description || "" };
+    if (/substream/i.test(entry.displayName)) {
+      deprioritized.push(entry);
+    } else {
+      results.push(entry);
+    }
   }
-  for (const s of json.data?.broader ?? []) {
-    if (seen.has(s.id)) continue;
-    seen.add(s.id);
-    results.push({ id: s.id, displayName: s.metadata?.displayName || s.id, description: s.metadata?.description || "" });
-  }
-  return results.slice(0, first);
+  return [...results, ...deprioritized].slice(0, first);
 }
 `;
 }
