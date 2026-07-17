@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
   ScaffoldConfig,
+  GraphIntegration,
   LlmProvider,
   SecretsMode,
   ShroudBillingMode,
@@ -70,6 +71,12 @@ import {
 } from "../scaffold-templates/agent-onchain-tools.js";
 import { ampersendClientSource } from "../scaffold-templates/ampersend-client.js";
 import { graphClientSource } from "../scaffold-templates/graph-client.js";
+import {
+  nextApiGraphQueryRoute,
+  nextApiGraphSearchRoute,
+  viteGraphExpressBlock,
+} from "../scaffold-templates/graph-api-routes.js";
+import { dataPageSource } from "../scaffold-templates/data-page.js";
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "0.0.14";
@@ -1644,6 +1651,15 @@ const COMPONENTS_JSON = JSON.stringify(
   2,
 );
 
+/** Express routes: Agent0 lookup + balances (+ optional Graph search/query). */
+function viteAuxExpressBlock(graphIntegration: GraphIntegration): string {
+  const base = viteAgent0AndBalancesExpressBlock();
+  if (graphIntegration === "none") return base;
+  const enableQuery =
+    graphIntegration === "x402" || graphIntegration === "both";
+  return base + viteGraphExpressBlock(enableQuery);
+}
+
 /** Express routes: Agent0 lookup + balances (uses repo-root network config). */
 function viteAgent0AndBalancesExpressBlock(): string {
   return `
@@ -2002,12 +2018,16 @@ export async function POST(req: Request) {
 `;
 }
 
-function headerComponentSource(projectName: string): string {
+function headerComponentSource(projectName: string, includeGraphTab = false): string {
+  const dataNav = includeGraphTab
+    ? `  { href: "/data", label: "Data", icon: Database },\n`
+    : "";
+  const graphIconImport = includeGraphTab ? ", Database" : "";
   return `"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Wallet, BadgeCheck, Info, Users, Bug, MessageSquare } from "lucide-react";
+import { Bot, Wallet, BadgeCheck, Info, Users, Bug, MessageSquare${graphIconImport} } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { LocalFaucetButton } from "@/components/LocalFaucetButton";
@@ -2019,7 +2039,7 @@ const NAV_ITEMS = [
   { href: "/ens", label: "ENS", icon: BadgeCheck },
   { href: "/identity", label: "Identity", icon: Info },
   { href: "/swarm", label: "Swarm", icon: Users },
-  { href: "/debug", label: "Debug", icon: Bug },
+${dataNav}  { href: "/debug", label: "Debug", icon: Bug },
 ];
 
 export function Header() {
@@ -3244,6 +3264,7 @@ module.exports = nextConfig;
   file(pkg, "postcss.config.mjs", POSTCSS_CONFIG);
   file(pkg, "components.json", COMPONENTS_JSON);
   file(pkg, "lib/utils.ts", UTILS_TS);
+  const includeGraph = config.graphIntegration !== "none";
   const includeGraphX402 = config.graphIntegration === "x402" || config.graphIntegration === "both";
   file(
     pkg,
@@ -3254,7 +3275,7 @@ module.exports = nextConfig;
       includeGraphX402,
     ),
   );
-  if (includeGraphX402) {
+  if (includeGraph) {
     file(
       pkg,
       "lib/graph-client.ts",
@@ -3276,7 +3297,7 @@ module.exports = nextConfig;
   file(pkg, "lib/web3-providers.tsx", web3ProvidersSource("next"));
   file(pkg, "components/ConnectWalletButton.tsx", connectWalletButtonSource());
   file(pkg, "components/LocalFaucetButton.tsx", localFaucetButtonSource());
-  file(pkg, "components/Header.tsx", headerComponentSource(config.projectName));
+  file(pkg, "components/Header.tsx", headerComponentSource(config.projectName, includeGraph));
   file(
     pkg,
     "lib/node-builtins-browser-stub.cjs",
@@ -3340,6 +3361,9 @@ module.exports = function stubPinoPretty() {
   file(pkg, "app/debug/loading.tsx", routeLoading);
   file(pkg, "app/ens/loading.tsx", routeLoading);
   file(pkg, "app/swarm/loading.tsx", routeLoading);
+  if (includeGraph) {
+    file(pkg, "app/data/loading.tsx", routeLoading);
+  }
 
   file(
     pkg,
@@ -3405,6 +3429,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   file(pkg, "app/ens/page.tsx", ensPageSource(config.projectName, "next"));
   file(pkg, "app/balances/page.tsx", balancesPageSource("next"));
   file(pkg, "app/swarm/page.tsx", swarmPageSource("next"));
+  if (includeGraph) {
+    file(pkg, "app/data/page.tsx", dataPageSource("next", config.graphIntegration));
+    file(pkg, "app/api/graph/search/route.ts", nextApiGraphSearchRoute());
+    if (includeGraphX402) {
+      file(pkg, "app/api/graph/query/route.ts", nextApiGraphQueryRoute());
+    }
+  }
   file(pkg, "app/api/agent0/lookup/route.ts", nextApiAgent0LookupRoute());
   file(pkg, "app/api/balances/route.ts", nextApiBalancesRoute());
   file(pkg, "app/api/faucet/route.ts", nextApiFaucetRoute());
@@ -3441,6 +3472,7 @@ function viteApiRouteOneClawShroud(
   billingModeDefault: ShroudBillingMode,
   installAmpersendSdk?: boolean,
   includeGraphX402?: boolean,
+  graphIntegration: GraphIntegration = "none",
 ): string {
   const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
   const graphSuffix = includeGraphX402 ? CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH : "";
@@ -3683,12 +3715,16 @@ app.post("/api/chat", async (req, res) => {
 
   result.pipeDataStreamToResponse(res);
 });
-${viteAgent0AndBalancesExpressBlock()}
+${viteAuxExpressBlock(graphIntegration)}
 app.listen(3001, () => console.log("API server on http://localhost:3001"));
 `;
 }
 
-function viteApiRouteVaultThirdParty(llm: ThirdPartyLlm, _installAmpersendSdk?: boolean): string {
+function viteApiRouteVaultThirdParty(
+  llm: ThirdPartyLlm,
+  _installAmpersendSdk?: boolean,
+  graphIntegration: GraphIntegration = "none",
+): string {
   const geminiModelBlock =
     llm === "gemini"
       ? `const geminiModelId =
@@ -3779,12 +3815,16 @@ app.post("/api/chat", async (req, res) => {
 
   result.pipeDataStreamToResponse(res);
 });
-${viteAgent0AndBalancesExpressBlock()}
+${viteAuxExpressBlock(graphIntegration)}
 app.listen(3001, () => console.log("API server on http://localhost:3001"));
 `;
 }
 
-function viteApiRouteDirectThirdParty(llm: ThirdPartyLlm, _installAmpersendSdk?: boolean): string {
+function viteApiRouteDirectThirdParty(
+  llm: ThirdPartyLlm,
+  _installAmpersendSdk?: boolean,
+  graphIntegration: GraphIntegration = "none",
+): string {
   const envKey = llmEnvKey(llm);
   const geminiModelBlock =
     llm === "gemini"
@@ -3826,7 +3866,7 @@ app.post("/api/chat", async (req, res) => {
 
   result.pipeDataStreamToResponse(res);
 });
-${viteAgent0AndBalancesExpressBlock()}
+${viteAuxExpressBlock(graphIntegration)}
 app.listen(3001, () => console.log("API server on http://localhost:3001${envKey ? ` (needs ${envKey})` : ""}"));
 `;
 }
@@ -3838,6 +3878,7 @@ function viteApiRoute(
   shroudBillingMode?: ShroudBillingMode,
   installAmpersendSdk?: boolean,
   includeGraphX402?: boolean,
+  graphIntegration: GraphIntegration = "none",
 ): string {
   if (llm === "oneclaw") {
     return viteApiRouteOneClawShroud(
@@ -3845,12 +3886,13 @@ function viteApiRoute(
       shroudBillingMode ?? "token_billing",
       installAmpersendSdk,
       includeGraphX402,
+      graphIntegration,
     );
   }
   if (useVaultForSecrets(secretsMode)) {
-    return viteApiRouteVaultThirdParty(llm, installAmpersendSdk);
+    return viteApiRouteVaultThirdParty(llm, installAmpersendSdk, graphIntegration);
   }
-  return viteApiRouteDirectThirdParty(llm, installAmpersendSdk);
+  return viteApiRouteDirectThirdParty(llm, installAmpersendSdk, graphIntegration);
 }
 
 function scaffoldVite(root: string, config: ScaffoldConfig) {
@@ -4016,7 +4058,7 @@ interface ImportMeta {
       config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
     ));
   }
-  if (config.graphIntegration === "x402" || config.graphIntegration === "both") {
+  if (config.graphIntegration !== "none") {
     file(pkg, "src/lib/graph-client.ts", graphClientSource({
       includeOneclaw: config.secrets.mode === "oneclaw",
       hasAmpersend: config.installAmpersendSdk,
@@ -4070,6 +4112,7 @@ const IdentityPage = lazy(() => import("./IdentityPage"));
 const EnsPage = lazy(() => import("./EnsPage"));
 const BalancesPage = lazy(() => import("./BalancesPage"));
 const SwarmPage = lazy(() => import("./SwarmPage"));
+${config.graphIntegration !== "none" ? 'const DataPage = lazy(() => import("./DataPage"));' : ""}
 
 createRoot(document.getElementById("root")!).render(
   <Web3Providers>
@@ -4088,6 +4131,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/ens" element={<EnsPage />} />
             <Route path="/balances" element={<BalancesPage />} />
             <Route path="/swarm" element={<SwarmPage />} />
+${config.graphIntegration !== "none" ? '            <Route path="/data" element={<DataPage />} />' : ""}
           </Routes>
         </Suspense>
       </div>
@@ -4115,6 +4159,13 @@ createRoot(document.getElementById("root")!).render(
   file(pkg, "src/EnsPage.tsx", ensPageSource(config.projectName, "vite"));
   file(pkg, "src/BalancesPage.tsx", balancesPageSource("vite"));
   file(pkg, "src/SwarmPage.tsx", swarmPageSource("vite"));
+  if (config.graphIntegration !== "none") {
+    file(
+      pkg,
+      "src/DataPage.tsx",
+      dataPageSource("vite", config.graphIntegration).replace('"use client";\n\n', ""),
+    );
+  }
   file(
     pkg,
     "server.ts",
@@ -4125,6 +4176,7 @@ createRoot(document.getElementById("root")!).render(
       config.shroudBillingMode,
       config.installAmpersendSdk,
       config.graphIntegration === "x402" || config.graphIntegration === "both",
+      config.graphIntegration,
     ),
   );
 
