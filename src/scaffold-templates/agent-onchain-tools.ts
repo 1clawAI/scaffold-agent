@@ -4,9 +4,13 @@
  */
 
 /** True when generated app includes `@1claw/sdk` (1Claw LLM and/or vault secrets). */
-export function agentOnchainToolsModuleSource(includeOneclawSdk: boolean, includeAmpersend: boolean = false): string {
+export function agentOnchainToolsModuleSource(includeOneclawSdk: boolean, includeAmpersend: boolean = false, includeGraph: boolean = false): string {
   const ampersendImport = includeAmpersend
     ? `import { getPaymentFetch } from "@/lib/ampersend-client";
+`
+    : "";
+  const graphImport = includeGraph
+    ? `import { querySubgraph, searchSubgraphs } from "@/lib/graph-client";
 `
     : "";
   const oneclawImport = includeOneclawSdk
@@ -449,6 +453,50 @@ function oneclawChainForActive(): string {
     })`
     : "";
 
+  const graphToolsBlock = includeGraph
+    ? `,
+    graph_search_subgraphs: tool({
+      description:
+        "Search The Graph Network for subgraphs by keyword. Returns subgraph IDs, display names, and descriptions. Use this to discover subgraphs before querying them with graph_subgraph_query.",
+      parameters: z.object({
+        keyword: z.string().describe("Search keyword (protocol name, e.g. 'uniswap', 'aave', 'ens')"),
+        first: z.number().optional().describe("Max results to return (default 5)"),
+      }),
+      execute: async ({ keyword, first }) => {
+        try {
+          const results = await searchSubgraphs(keyword, first ?? 5);
+          if (results.length === 0) return { results: [], message: "No subgraphs found for that keyword" };
+          return { results };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { error: msg };
+        }
+      },
+    }),
+    graph_subgraph_query: tool({
+      description:
+        "Query a subgraph on The Graph Network using GraphQL. Pays per-query in USDC via x402 (no API key needed). Use graph_search_subgraphs first to find the subgraph ID. Supports any deployed subgraph.",
+      parameters: z.object({
+        subgraphId: z.string().describe("The subgraph ID from The Graph (e.g. from graph_search_subgraphs results)"),
+        query: z.string().describe("GraphQL query string"),
+        variables: z
+          .string()
+          .optional()
+          .describe("JSON-encoded variables for the GraphQL query"),
+      }),
+      execute: async ({ subgraphId, query, variables }) => {
+        try {
+          const vars = variables ? JSON.parse(variables) : undefined;
+          const result = await querySubgraph(subgraphId, query, vars);
+          return { data: result };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { error: msg };
+        }
+      },
+    })`
+    : "";
+
   return `import { tool } from "ai";
 import { z } from "zod";
 import {
@@ -466,7 +514,7 @@ import { mainnet } from "viem/chains";
 import deployedContracts from "@/contracts/deployedContracts";
 import { getActiveNetwork, NETWORKS, rpcOverrides, type NetworkDefinition } from "@/lib/networks";
 import { viemChainForNetwork } from "@repo/viem-chain";
-${oneclawImport}${ampersendImport}
+${oneclawImport}${ampersendImport}${graphImport}
 function networkForChainId(chainId: number): NetworkDefinition | null {
   for (const n of Object.values(NETWORKS) as NetworkDefinition[]) {
     if (n.chainId === chainId) {
@@ -643,7 +691,7 @@ export function buildAgentOnchainTools() {
           return { error: msg };
         }
       },
-    })${walletEnsToolsBlock}${oneclawToolsBlock}${ampersendToolsBlock},
+    })${walletEnsToolsBlock}${oneclawToolsBlock}${ampersendToolsBlock}${graphToolsBlock},
   };
 }
 `;

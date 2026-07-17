@@ -6,6 +6,7 @@ import {
   promptInstallAmpersendSdk,
   promptAmpersendSigningKey,
   promptAmpersendAgentCredentials,
+  promptGraphIntegration,
   promptLlmProvider,
   promptThirdPartyLlmApiKey,
   promptShroudUpstreamProvider,
@@ -24,6 +25,7 @@ import { shroudProviderVaultKeyPath } from "./shroud-paths.js";
 import type {
   AppFramework,
   ChainFramework,
+  GraphIntegration,
   LlmProvider,
   OneclawSigningChain,
   ShroudBillingMode,
@@ -36,6 +38,7 @@ import {
   parseAmpersendFlag,
   parseChain,
   parseFramework,
+  parseGraphIntegration,
   parseLlm,
   parseOneclawSigningChains,
   parseSecretsMode,
@@ -58,6 +61,10 @@ export type GatheredWizard = {
   ampersendSigningKey: string | undefined;
   /** Ampersend smart account address (AMPERSEND_SMART_ACCOUNT_ADDRESS). */
   ampersendSmartAccountAddress: string | undefined;
+  /** The Graph subgraph integration mode. */
+  graphIntegration: GraphIntegration;
+  /** Optional Graph API key (fallback from x402). */
+  graphApiKey: string | undefined;
   llm: LlmProvider;
   shroudUpstream: ShroudUpstreamProvider | undefined;
   shroudBillingMode: ShroudBillingMode | undefined;
@@ -238,6 +245,21 @@ export async function gatherWizardInputs(
     }
   }
 
+  let graphIntegration: GraphIntegration;
+  if (nonInteractive) {
+    graphIntegration = parseGraphIntegration(v.graph, true);
+  } else if (v.graph !== undefined && v.graph !== "") {
+    graphIntegration = parseGraphIntegration(v.graph, false);
+  } else {
+    graphIntegration = await promptGraphIntegration();
+  }
+
+  let graphApiKey: string | undefined;
+  if (graphIntegration === "x402" || graphIntegration === "both") {
+    const k = v["graph-api-key"];
+    graphApiKey = k !== undefined && k !== "" ? k : undefined;
+  }
+
   let llm: LlmProvider;
   if (nonInteractive) {
     llm = parseLlm(v.llm, true);
@@ -413,6 +435,8 @@ export async function gatherWizardInputs(
     installAmpersendSdk,
     ampersendSigningKey,
     ampersendSmartAccountAddress,
+    graphIntegration,
+    graphApiKey,
     llm,
     shroudUpstream,
     shroudBillingMode,

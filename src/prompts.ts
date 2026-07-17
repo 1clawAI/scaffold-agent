@@ -4,6 +4,7 @@ import type {
   SecretsMode,
   ChainFramework,
   AppFramework,
+  GraphIntegration,
   LlmProvider,
   OneclawSigningChain,
   ShroudBillingMode,
@@ -207,6 +208,38 @@ export async function promptInstallAmpersendSdk(): Promise<boolean> {
           "Add @ampersend_ai/ampersend-sdk + AMPERSEND.md (x402 payments, A2A, MCP)",
       },
       { value: false, name: "No" },
+    ],
+  });
+}
+
+/** The Graph subgraph data — MCP for Cursor/Claude IDE tools, x402 for runtime agent queries. */
+export async function promptGraphIntegration(): Promise<GraphIntegration> {
+  return select<GraphIntegration>({
+    message: "The Graph subgraph data?",
+    choices: [
+      {
+        value: "none" as const,
+        name: "None",
+        description: "No subgraph integration",
+      },
+      {
+        value: "mcp" as const,
+        name: "MCP only (IDE)",
+        description:
+          "Subgraph MCP server in .cursor/mcp.json — Cursor/Claude can query subgraphs at dev time",
+      },
+      {
+        value: "x402" as const,
+        name: "x402 agent tool (runtime)",
+        description:
+          "Chat agent queries any subgraph on The Graph Network, paying per-query with USDC (no API key)",
+      },
+      {
+        value: "both" as const,
+        name: "Both (MCP + x402 agent tool)",
+        description:
+          "IDE MCP for dev + runtime agent tool for chat",
+      },
     ],
   });
 }

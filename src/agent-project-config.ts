@@ -43,6 +43,8 @@ const OPTION_KEY_TO_CLI: Record<string, keyof CliFlagValues> = {
   "env-password": "env-password",
   agent: "agent",
   ampersend: "ampersend",
+  graph: "graph",
+  "graph-api-key": "graph-api-key",
   llm: "llm",
   "shroud-upstream": "shroud-upstream",
   "shroud-billing": "shroud-billing",
@@ -255,6 +257,7 @@ const SENSITIVE_DUMP_KEYS = new Set<keyof CliFlagValues>([
   "shroud-provider-api-key",
   "llm-api-key",
   "oneclaw-agent-api-key",
+  "graph-api-key",
 ]);
 
 const SKIP_DUMP_KEYS = new Set<keyof CliFlagValues>([
@@ -278,6 +281,9 @@ export function withDumpTemplateDefaults(v: CliFlagValues): CliFlagValues {
   }
   if (o.ampersend === undefined || o.ampersend === "") {
     o.ampersend = NON_INTERACTIVE_DEFAULTS.installAmpersendSdk ? "yes" : "no";
+  }
+  if (o.graph === undefined || o.graph === "") {
+    o.graph = NON_INTERACTIVE_DEFAULTS.graphIntegration;
   }
   if (o.llm === undefined || o.llm === "") {
     o.llm = NON_INTERACTIVE_DEFAULTS.llm;

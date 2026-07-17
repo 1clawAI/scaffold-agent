@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import type {
   AppFramework,
   ChainFramework,
+  GraphIntegration,
   LlmProvider,
   OneclawSigningChain,
   SecretsMode,
@@ -28,6 +29,7 @@ const SHROUD_BILLING: readonly ShroudBillingMode[] = [
 ];
 const CHAIN: readonly ChainFramework[] = ["foundry", "hardhat", "none"];
 const FRAMEWORK: readonly AppFramework[] = ["nextjs", "vite", "python"];
+const GRAPH: readonly GraphIntegration[] = ["none", "mcp", "x402", "both"];
 
 export const ONECLAW_SIGNING_CHAINS: readonly OneclawSigningChain[] = [
   "ethereum",
@@ -43,6 +45,7 @@ export const NON_INTERACTIVE_DEFAULTS = {
   secrets: "oneclaw" as const,
   generateAgent: true,
   installAmpersendSdk: false,
+  graphIntegration: "none" as GraphIntegration,
   llm: "oneclaw" as const,
   shroudUpstream: "openai" as const,
   shroudBilling: "token_billing" as const,
@@ -67,6 +70,10 @@ export type CliFlagValues = {
   "ampersend-signing-key"?: string;
   /** Ampersend smart account address (from ampersend.ai). */
   "ampersend-smart-account"?: string;
+  /** `none` | `mcp` | `x402` | `both` */
+  graph?: string;
+  /** The Graph API key (optional — fallback from x402; stored in vault or .env). */
+  "graph-api-key"?: string;
   llm?: string;
   "shroud-upstream"?: string;
   "shroud-billing"?: string;
@@ -149,6 +156,8 @@ export function parseScaffoldArgv(argv: string[]): ParsedScaffoldArgv {
       ampersend: { type: "string" },
       "ampersend-signing-key": { type: "string" },
       "ampersend-smart-account": { type: "string" },
+      graph: { type: "string" },
+      "graph-api-key": { type: "string" },
       llm: { type: "string" },
       "shroud-upstream": { type: "string" },
       "shroud-billing": { type: "string" },
@@ -239,6 +248,17 @@ export function parseAmpersendFlag(
   if (x === "yes" || x === "true" || x === "1") return true;
   if (x === "no" || x === "false" || x === "0") return false;
   throw new Error(`CLI: invalid --ampersend "${raw}". Use yes | no.`);
+}
+
+export function parseGraphIntegration(
+  raw: string | undefined,
+  nonInteractive: boolean,
+): GraphIntegration {
+  if (raw === undefined || raw === "") {
+    if (nonInteractive) return NON_INTERACTIVE_DEFAULTS.graphIntegration;
+    throw new Error("CLI: internal — graph");
+  }
+  return parseEnum("graph", raw, GRAPH);
 }
 
 export function parseSecretsMode(

@@ -94,6 +94,11 @@ Agent & extras:
   --swarm <n>                 Generate N agent wallets (1–64); primary stays AGENT_ADDRESS
   --ampersend <choice>        yes | no        (default with -y: no)
   --ampersend-signing-key     Ampersend signing key from ampersend.ai (stored in vault or encrypted .env)
+  --graph <mode>              none | mcp | x402 | both  (default with -y: none)
+                              mcp = Subgraph MCP server in .cursor/mcp.json (IDE time)
+                              x402 = Agent tool for runtime subgraph queries via x402 payments
+                              both = MCP + x402 agent tool
+  --graph-api-key <key>       The Graph API key (optional fallback; stored in vault or .env)
   --from-config <file>        Merge options from agent.json (CLI flags override file)
   --dump-config               Print agent.json to stdout (merged flags + optional --from-config;
                               secret flags omitted; fills unset fields with -y defaults)
@@ -128,8 +133,9 @@ Arguments:
 Interactive mode: omit --non-interactive; any option above skips that prompt when set.
 
 Non-interactive (-y): set --env-password when --secrets is oneclaw or encrypted; defaults:
-  secrets=${NON_INTERACTIVE_DEFAULTS.secrets}, agent=generate, ampersend=no, llm=${NON_INTERACTIVE_DEFAULTS.llm},
-  shroud-upstream=${NON_INTERACTIVE_DEFAULTS.shroudUpstream}, shroud-billing=${NON_INTERACTIVE_DEFAULTS.shroudBilling},
+  secrets=${NON_INTERACTIVE_DEFAULTS.secrets}, agent=generate, ampersend=no, graph=none,
+  llm=${NON_INTERACTIVE_DEFAULTS.llm}, shroud-upstream=${NON_INTERACTIVE_DEFAULTS.shroudUpstream},
+  shroud-billing=${NON_INTERACTIVE_DEFAULTS.shroudBilling},
   chain=${NON_INTERACTIVE_DEFAULTS.chain}, framework=${NON_INTERACTIVE_DEFAULTS.framework}
 
 Environment:
@@ -319,6 +325,8 @@ async function main() {
     installAmpersendSdk,
     ampersendSigningKey,
     ampersendSmartAccountAddress,
+    graphIntegration,
+    graphApiKey,
     llm,
     swarmEntries,
     oneclawIntentsEnabled,
@@ -368,6 +376,27 @@ async function main() {
       success(`Smart account address: ${ampersendSmartAccountAddress}`);
     } else {
       info("Add AMPERSEND_SMART_ACCOUNT_ADDRESS later in .env for x402 smart account payments");
+    }
+  }
+
+  if (graphIntegration !== "none") {
+    section("The Graph (subgraph data)");
+    info("Docs:     https://thegraph.com/docs/");
+    if (graphIntegration === "mcp" || graphIntegration === "both") {
+      info("MCP:      Subgraph MCP server → .cursor/mcp.json + .mcp.json (IDE time)");
+    }
+    if (graphIntegration === "x402" || graphIntegration === "both") {
+      info("x402:     Agent queries subgraphs at runtime, paying per-query in USDC");
+      info("Guide:    https://thegraph.com/docs/en/subgraphs/tooling/x402-payments/");
+      if (graphApiKey) {
+        success(
+          secrets.mode === "oneclaw"
+            ? "Graph API key will be stored in 1Claw vault (api-keys/graph)"
+            : "Graph API key will be stored in .env.secrets.encrypted (GRAPH_API_KEY)",
+        );
+      } else {
+        info("Optional: Add GRAPH_API_KEY later for query volume fallback (free tier)");
+      }
     }
   }
 
@@ -495,6 +524,7 @@ async function main() {
           intentsApiEnabled: oneclawIntentsEnabled,
           shroudEnabled: llm === "oneclaw",
           ampersendSigningKey,
+          graphApiKey,
           signingChains: oneclawIntentsEnabled ? oneclawSigningChains : undefined,
           shroudProviderApiKey:
             shroudProviderKeyForVault && shroudVaultPath
@@ -569,6 +599,7 @@ async function main() {
       swarmAgents,
     },
     installAmpersendSdk,
+    graphIntegration,
     deployer: { address: deployer.address, privateKey: deployer.privateKey },
     chain,
     framework,
@@ -654,6 +685,10 @@ async function main() {
   }
   if (ampersendSmartAccountAddress) {
     envVars["AMPERSEND_SMART_ACCOUNT_ADDRESS"] = ampersendSmartAccountAddress;
+  }
+
+  if (graphApiKey && secrets.mode !== "oneclaw") {
+    envVars["GRAPH_API_KEY"] = graphApiKey;
   }
 
   const shouldEncrypt =

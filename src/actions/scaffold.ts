@@ -57,6 +57,7 @@ import {
   chatRouteAgentToolsStreamTextFragment,
 } from "../scaffold-templates/agent-onchain-tools.js";
 import { ampersendClientSource } from "../scaffold-templates/ampersend-client.js";
+import { graphClientSource } from "../scaffold-templates/graph-client.js";
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "0.0.14";
@@ -79,6 +80,8 @@ const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
   " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit / oneclaw_intent_sign_only, those call 1Claw Intents API (HSM/TEE signing across 29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron; https://1claw.xyz/intents). Signing keys never leave the HSM. Never submit high-value txs without explicit user confirmation. Use oneclaw_list_signing_keys and oneclaw_check_signing_balances for HSM key addresses and balances.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
   " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
+const CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH =
+  " You have graph_search_subgraphs and graph_subgraph_query tools for querying The Graph Network. Use graph_search_subgraphs to discover subgraphs by keyword (e.g. 'uniswap', 'aave', 'ens'), then graph_subgraph_query with the subgraph ID + GraphQL query to fetch on-chain indexed data. Queries pay per-use in USDC via x402 (no API key needed).";
 
 /**
  * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
@@ -403,29 +406,42 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     )}\n`,
   );
 
-  // Generate MCP configs when 1Claw is used (secrets or LLM)
-  if (config.secrets.mode === "oneclaw" || config.llm === "oneclaw") {
-    const mcpServerDef = {
-      command: "npx",
-      args: ["-y", "@1claw/mcp@0.40.3"],
-      env: {
-        ONECLAW_AGENT_API_KEY: "${ONECLAW_AGENT_API_KEY}",
-      },
-    };
+  // Generate MCP configs when 1Claw is used (secrets or LLM) or Graph MCP is selected
+  const includeGraphMcp = config.graphIntegration === "mcp" || config.graphIntegration === "both";
+  const use1ClawMcp = config.secrets.mode === "oneclaw" || config.llm === "oneclaw";
+  if (use1ClawMcp || includeGraphMcp) {
+    const mcpServers: Record<string, unknown> = {};
+
+    if (use1ClawMcp) {
+      mcpServers["1claw"] = {
+        command: "npx",
+        args: ["-y", "@1claw/mcp@0.40.3"],
+        env: {
+          ONECLAW_AGENT_API_KEY: "${ONECLAW_AGENT_API_KEY}",
+        },
+      };
+    }
+
+    if (includeGraphMcp) {
+      mcpServers["subgraph"] = {
+        command: "npx",
+        args: ["-y", "@graphprotocol/subgraph-mcp@latest"],
+      };
+    }
 
     // Cursor: .cursor/mcp.json
     dir(root, ".cursor");
     file(
       join(root, ".cursor"),
       "mcp.json",
-      JSON.stringify({ mcpServers: { "1claw": mcpServerDef } }, null, 2) + "\n",
+      JSON.stringify({ mcpServers }, null, 2) + "\n",
     );
 
     // Claude Code: .mcp.json (root-level, Claude Code convention)
     file(
       root,
       ".mcp.json",
-      JSON.stringify({ mcpServers: { "1claw": mcpServerDef } }, null, 2) + "\n",
+      JSON.stringify({ mcpServers }, null, 2) + "\n",
     );
   }
 
@@ -2366,9 +2382,11 @@ function nextApiRouteOneClawShroud(
   upstream: ShroudUpstreamProvider,
   billingModeDefault: ShroudBillingMode,
   installAmpersendSdk?: boolean,
+  includeGraphX402?: boolean,
 ): string {
   const modelFallback = shroudDefaultModel(upstream);
   const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
+  const graphSuffix = includeGraphX402 ? CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH : "";
   return `import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import {
@@ -2400,7 +2418,8 @@ const CHAT_SYSTEM = ${JSON.stringify(
     "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
       CHAT_SYSTEM_TOOLS_SUFFIX +
       CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
-      x402Suffix,
+      x402Suffix +
+      graphSuffix,
   )};
 
 /** Canonical 8-4-4-4-12 hex (any version/variant 1Claw may return). */
@@ -2632,8 +2651,9 @@ export async function POST(req: Request) {
 `;
 }
 
-function nextApiRouteVaultThirdParty(llm: ThirdPartyLlm, installAmpersendSdk?: boolean): string {
+function nextApiRouteVaultThirdParty(llm: ThirdPartyLlm, installAmpersendSdk?: boolean, includeGraphX402?: boolean): string {
   const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
+  const graphSuffix = includeGraphX402 ? CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH : "";
   const geminiModelBlock =
     llm === "gemini"
       ? `const geminiModelId =
@@ -2723,7 +2743,8 @@ export async function POST(req: Request) {
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
         CHAT_SYSTEM_TOOLS_SUFFIX +
         CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
-        x402Suffix,
+        x402Suffix +
+        graphSuffix,
     )},
     messages: convertToCoreMessages(messages),
     tools: _agentOnchainTools,
@@ -2738,8 +2759,9 @@ export async function POST(req: Request) {
 `;
 }
 
-function nextApiRouteDirectThirdParty(llm: ThirdPartyLlm, installAmpersendSdk?: boolean): string {
+function nextApiRouteDirectThirdParty(llm: ThirdPartyLlm, installAmpersendSdk?: boolean, includeGraphX402?: boolean): string {
   const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
+  const graphSuffix = includeGraphX402 ? CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH : "";
   const geminiModelBlock =
     llm === "gemini"
       ? `const geminiModelId =
@@ -2777,7 +2799,8 @@ export async function POST(req: Request) {
       "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
         CHAT_SYSTEM_TOOLS_SUFFIX +
         CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
-        x402Suffix,
+        x402Suffix +
+        graphSuffix,
     )},
     messages: convertToCoreMessages(messages),
     tools: _agentOnchainTools,
@@ -2798,18 +2821,20 @@ function nextApiRoute(
   shroudUpstream?: ShroudUpstreamProvider,
   shroudBillingMode?: ShroudBillingMode,
   installAmpersendSdk?: boolean,
+  includeGraphX402?: boolean,
 ): string {
   if (llm === "oneclaw") {
     return nextApiRouteOneClawShroud(
       shroudUpstream ?? "openai",
       shroudBillingMode ?? "token_billing",
       installAmpersendSdk,
+      includeGraphX402,
     );
   }
   if (useVaultForSecrets(secretsMode)) {
-    return nextApiRouteVaultThirdParty(llm, installAmpersendSdk);
+    return nextApiRouteVaultThirdParty(llm, installAmpersendSdk, includeGraphX402);
   }
-  return nextApiRouteDirectThirdParty(llm, installAmpersendSdk);
+  return nextApiRouteDirectThirdParty(llm, installAmpersendSdk, includeGraphX402);
 }
 
 /** Public roster for `fetch("/agents.json")` (no private keys). */
@@ -3066,14 +3091,26 @@ module.exports = nextConfig;
   file(pkg, "postcss.config.mjs", POSTCSS_CONFIG);
   file(pkg, "components.json", COMPONENTS_JSON);
   file(pkg, "lib/utils.ts", UTILS_TS);
+  const includeGraphX402 = config.graphIntegration === "x402" || config.graphIntegration === "both";
   file(
     pkg,
     "lib/agent-onchain-tools.ts",
     agentOnchainToolsModuleSource(
       config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
       config.installAmpersendSdk,
+      includeGraphX402,
     ),
   );
+  if (includeGraphX402) {
+    file(
+      pkg,
+      "lib/graph-client.ts",
+      graphClientSource({
+        includeOneclaw: config.secrets.mode === "oneclaw",
+        hasAmpersend: config.installAmpersendSdk,
+      }),
+    );
+  }
   if (config.installAmpersendSdk) {
     file(pkg, "lib/ampersend-client.ts", ampersendClientSource(
       config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
@@ -3225,6 +3262,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       config.shroudUpstream,
       config.shroudBillingMode,
       config.installAmpersendSdk,
+      includeGraphX402,
     ),
   );
 
@@ -3247,8 +3285,10 @@ function viteApiRouteOneClawShroud(
   upstream: ShroudUpstreamProvider,
   billingModeDefault: ShroudBillingMode,
   installAmpersendSdk?: boolean,
+  includeGraphX402?: boolean,
 ): string {
   const x402Suffix = installAmpersendSdk ? CHAT_SYSTEM_TOOLS_SUFFIX_X402 : "";
+  const graphSuffix = includeGraphX402 ? CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH : "";
   const modelFallback = shroudDefaultModel(upstream);
   return `import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -3283,7 +3323,8 @@ const CHAT_SYSTEM = ${JSON.stringify(
     "You are an onchain AI agent assistant. Help users interact with smart contracts and manage their wallets." +
       CHAT_SYSTEM_TOOLS_SUFFIX +
       CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW +
-      x402Suffix,
+      x402Suffix +
+      graphSuffix,
   )};
 
 const ONECLAW_UUID_RE =
@@ -3641,12 +3682,14 @@ function viteApiRoute(
   shroudUpstream?: ShroudUpstreamProvider,
   shroudBillingMode?: ShroudBillingMode,
   installAmpersendSdk?: boolean,
+  includeGraphX402?: boolean,
 ): string {
   if (llm === "oneclaw") {
     return viteApiRouteOneClawShroud(
       shroudUpstream ?? "openai",
       shroudBillingMode ?? "token_billing",
       installAmpersendSdk,
+      includeGraphX402,
     );
   }
   if (useVaultForSecrets(secretsMode)) {
@@ -3818,6 +3861,12 @@ interface ImportMeta {
       config.llm === "oneclaw" || config.secrets.mode === "oneclaw",
     ));
   }
+  if (config.graphIntegration === "x402" || config.graphIntegration === "both") {
+    file(pkg, "src/lib/graph-client.ts", graphClientSource({
+      includeOneclaw: config.secrets.mode === "oneclaw",
+      hasAmpersend: config.installAmpersendSdk,
+    }));
+  }
   file(pkg, "src/lib/burner-auto-connect.tsx", burnerAutoConnectSource());
   file(pkg, "src/lib/agent-swarm.tsx", agentSwarmContextSource("vite"));
   file(pkg, "src/lib/wagmi-config.ts", wagmiConfigSource(config.projectName, "vite"));
@@ -3920,6 +3969,7 @@ createRoot(document.getElementById("root")!).render(
       config.shroudUpstream,
       config.shroudBillingMode,
       config.installAmpersendSdk,
+      config.graphIntegration === "x402" || config.graphIntegration === "both",
     ),
   );
 

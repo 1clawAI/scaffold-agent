@@ -61,12 +61,17 @@ export interface OneClawResult {
   signingKeys?: { chain: string; address: string }[];
 }
 
+/** The Graph subgraph data access — MCP for dev IDE, x402 for runtime agent, or both. */
+export type GraphIntegration = "none" | "mcp" | "x402" | "both";
+
 export interface ScaffoldConfig {
   projectName: string;
   secrets: SecretsConfig;
   identity: IdentityConfig;
   /** Add @ampersend_ai/ampersend-sdk (Next/Vite) + AMPERSEND.md; see https://docs.ampersend.ai */
   installAmpersendSdk: boolean;
+  /** The Graph subgraph integration — MCP (IDE), x402 agent tool (runtime), or both. */
+  graphIntegration: GraphIntegration;
   deployer: DeployerConfig;
   chain: ChainFramework;
   framework: AppFramework;
