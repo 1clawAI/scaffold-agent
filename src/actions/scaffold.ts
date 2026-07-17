@@ -37,6 +37,18 @@ import { balancesPageSource } from "../scaffold-templates/balances-page.js";
 import { ensPageSource } from "../scaffold-templates/ens-page.js";
 import { identityPageSource } from "../scaffold-templates/identity-page.js";
 import {
+  PAGE_CARD,
+  PAGE_CARD_TITLE,
+  PAGE_HEADER,
+  PAGE_HEADER_ICON,
+  PAGE_HEADER_SUBTITLE,
+  PAGE_HEADER_TITLE,
+  PAGE_MAIN,
+  PAGE_MAIN_FULL,
+  PAGE_MAIN_WIDE,
+  PAGE_SHELL,
+} from "../scaffold-templates/page-layout.js";
+import {
   networkDefinitionsSource,
   nextNetworksReexportSource,
   scaffoldConfigSource,
@@ -1287,27 +1299,33 @@ const SHADCN_CSS = `@tailwind base;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 0 72% 51%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 240 15% 4%;
-    --foreground: 0 0% 95%;
-    --card: 240 12% 7%;
-    --card-foreground: 0 0% 95%;
+    --background: 240 12% 5%;
+    --foreground: 0 0% 96%;
+    --card: 240 10% 9%;
+    --card-foreground: 0 0% 96%;
     --primary: 0 72% 51%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 14%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 240 5% 14%;
-    --muted-foreground: 240 5% 60%;
-    --accent: 240 5% 14%;
-    --accent-foreground: 0 0% 95%;
+    --secondary: 240 6% 16%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 240 6% 16%;
+    --muted-foreground: 240 5% 58%;
+    --accent: 240 6% 16%;
+    --accent-foreground: 0 0% 96%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5% 16%;
-    --input: 240 5% 16%;
+    --border: 240 6% 18%;
+    --input: 240 6% 18%;
     --ring: 0 72% 51%;
+  }
+}
+
+@layer components {
+  .prose-code {
+    @apply rounded-md bg-muted px-1.5 py-0.5 text-[0.8125rem] font-mono;
   }
 }
 
@@ -1318,6 +1336,8 @@ const SHADCN_CSS = `@tailwind base;
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    min-height: 100dvh;
   }
   :where(a, button, input, textarea, select, summary):focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
@@ -1327,28 +1347,135 @@ const SHADCN_CSS = `@tailwind base;
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 
-  /* Scaffold UI (/debug): readable inputs on our dark theme */
-  .dark,
-  .dark * {
-    --color-sui-base-100: hsl(240 12% 10%);
-    --color-sui-primary-content: hsl(0 0% 95%);
-    --color-sui-base-content: hsl(0 0% 95%);
-    --color-sui-input-background: hsl(240 15% 6%);
-    --color-sui-input-text: hsl(0 0% 95%);
-    --color-sui-input-border: hsl(240 5% 22%);
-    --color-sui-input-border-disabled: hsl(240 5% 16%);
+  /* Scaffold UI (/debug): polished dark theme (Turbopack does not bundle @scaffold-ui CSS). */
+  .scaffold-ui-debug,
+  .scaffold-ui-debug * {
+    --color-sui-base-100: hsl(240 10% 11%);
+    --color-sui-primary-subtle: hsl(240 8% 17%);
+    --color-sui-primary-neutral: hsl(240 8% 14%);
+    --color-sui-primary-content: hsl(0 0% 96%);
+    --color-sui-base-content: hsl(0 0% 96%);
+    --color-sui-input-background: hsl(240 12% 7%);
+    --color-sui-input-text: hsl(0 0% 98%);
+    --color-sui-input-border: hsl(240 6% 26%);
+    --color-sui-input-border-disabled: hsl(240 5% 18%);
+    --color-sui-input-border-error: hsl(0 72% 51%);
     --color-sui-primary: hsl(0 72% 51%);
-    --color-sui-primary-subtle: hsl(240 5% 14%);
-    --color-sui-primary-neutral: hsl(240 12% 9%);
-    --color-sui-accent: hsl(0 72% 51%);
+    --color-sui-accent: hsl(240 5% 55%);
     --color-sui-skeleton-base: hsl(240 5% 14%);
-    --color-sui-skeleton-highlight: hsl(240 5% 18%);
+    --color-sui-skeleton-highlight: hsl(240 5% 20%);
   }
 
+  .scaffold-ui-debug .bg-sui-base-100 { background-color: var(--color-sui-base-100); }
+  .scaffold-ui-debug .bg-sui-primary-subtle { background-color: var(--color-sui-primary-subtle); }
+  .scaffold-ui-debug .bg-sui-primary { background-color: var(--color-sui-primary); }
+  .scaffold-ui-debug .bg-sui-primary-neutral { background-color: var(--color-sui-primary-neutral); }
+  .scaffold-ui-debug .bg-sui-input-background { background-color: var(--color-sui-input-background); }
+  .scaffold-ui-debug .bg-sui-input-border { background-color: var(--color-sui-input-border); }
+  .scaffold-ui-debug .border-sui-primary-subtle { border-color: var(--color-sui-primary-subtle); }
+  .scaffold-ui-debug .border-sui-primary { border-color: var(--color-sui-primary); }
+  .scaffold-ui-debug .border-sui-input-border { border-color: var(--color-sui-input-border); }
+  .scaffold-ui-debug .text-sui-primary-content { color: var(--color-sui-primary-content); }
+  .scaffold-ui-debug .text-sui-accent { color: var(--color-sui-accent); }
+  .scaffold-ui-debug .text-sui-input-text { color: var(--color-sui-input-text); }
+  .scaffold-ui-debug .text-sui-primary { color: var(--color-sui-primary); }
+  .scaffold-ui-debug .divide-sui-primary-subtle > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--color-sui-primary-subtle);
+  }
+
+  .dark .scaffold-ui-debug [class~="dark:border-sui-primary"] { border-color: hsl(0 72% 51% / 0.35); }
+  .dark .scaffold-ui-debug [class~="dark:bg-sui-primary"] { background-color: var(--color-sui-primary); }
+  .dark .scaffold-ui-debug [class~="dark:bg-sui-primary"].overflow-y-auto {
+    background-color: var(--color-sui-primary-neutral);
+  }
+  .dark .scaffold-ui-debug [class~="dark:shadow-sui-primary"] {
+    box-shadow: 0 4px 14px hsl(0 72% 51% / 0.18);
+  }
+  .dark .scaffold-ui-debug [class~="dark:bg-sui-primary"][class*="h-[5rem]"] {
+    background-color: hsl(0 55% 22%);
+  }
+
+  .scaffold-ui-debug .shadow-md {
+    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.35), 0 0 0 1px hsl(240 6% 20% / 0.5);
+  }
+  .scaffold-ui-debug .shadow-lg {
+    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.45);
+  }
+  .scaffold-ui-debug .shadow-sui-primary-subtle {
+    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.3);
+  }
+
+  .scaffold-ui-debug .flex.border-2.rounded-full.border-sui-input-border {
+    border-radius: 0.625rem;
+    border-width: 1px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .scaffold-ui-debug .flex.border-2.rounded-full.border-sui-input-border:focus-within {
+    border-color: hsl(0 72% 51% / 0.55);
+    box-shadow: 0 0 0 3px hsl(0 72% 51% / 0.12);
+  }
+  .scaffold-ui-debug .flex.border-2.rounded-full.border-sui-input-border:hover:not(:focus-within) {
+    border-color: hsl(240 6% 32%);
+  }
+
+  .scaffold-ui-debug input,
+  .scaffold-ui-debug textarea {
+    font-variant-numeric: tabular-nums;
+  }
   .scaffold-ui-debug input::placeholder,
   .scaffold-ui-debug textarea::placeholder {
-    color: hsl(var(--muted-foreground));
+    color: hsl(240 5% 45%);
     opacity: 1;
+  }
+
+  .scaffold-ui-debug .btn-dc {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    transition: background-color 0.15s ease, transform 0.075s ease, box-shadow 0.15s ease;
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+  }
+  .scaffold-ui-debug .btn-dc:disabled { opacity: 0.5; cursor: not-allowed; }
+  .scaffold-ui-debug .btn-dc:active:not(:disabled) { transform: scale(0.97); }
+  .scaffold-ui-debug .btn-dc-primary,
+  .scaffold-ui-debug .btn-dc-accent {
+    background-color: var(--color-sui-primary);
+    color: hsl(0 0% 100%);
+  }
+  .scaffold-ui-debug .btn-dc-primary:hover:not(:disabled),
+  .scaffold-ui-debug .btn-dc-accent:hover:not(:disabled) {
+    background-color: hsl(0 72% 46%);
+    box-shadow: 0 2px 8px hsl(0 72% 51% / 0.35);
+  }
+  .scaffold-ui-debug .btn-dc-secondary {
+    background-color: var(--color-sui-primary-subtle);
+    color: var(--color-sui-primary-content);
+  }
+  .scaffold-ui-debug .btn-dc-secondary:hover:not(:disabled) {
+    background-color: hsl(240 8% 22%);
+  }
+
+  .scaffold-ui-debug .sui-skeleton {
+    background-color: var(--color-sui-skeleton-base);
+    border-radius: 0.375rem;
+    background-image: linear-gradient(
+      105deg,
+      transparent 0% 40%,
+      var(--color-sui-skeleton-highlight) 50%,
+      transparent 60% 100%
+    );
+    background-size: 200%;
+    animation: sui-skeleton 1.8s ease-in-out infinite;
+  }
+  @keyframes sui-skeleton {
+    0% { background-position-x: -50%; }
+    100% { background-position-x: 150%; }
   }
 }
 `;
@@ -1361,6 +1488,7 @@ const config: Config = {
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
     "./src/**/*.{ts,tsx}",
+    "./node_modules/@scaffold-ui/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -1431,20 +1559,20 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
         secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         outline: "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
         ghost: "hover:bg-accent hover:text-accent-foreground",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-lg px-3.5 text-xs",
+        lg: "h-11 rounded-lg px-8",
+        icon: "h-10 w-10",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -1482,7 +1610,7 @@ const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLI
     <input
       type={type}
       className={cn(
-        "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full rounded-lg border border-input bg-transparent px-4 py-2 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       ref={ref}
@@ -1899,20 +2027,20 @@ export function Header() {
 
   return (
     <header
-      className="border-b border-border bg-card/80 backdrop-blur-sm px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-40"
+      className="border-b border-border bg-card/80 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4 sticky top-0 z-40 shrink-0"
       role="banner"
     >
-      <Link href="/" className="flex items-center gap-2.5 shrink-0">
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+      <Link href="/" className="flex items-center gap-3 shrink-0">
+        <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-sm">
           <Bot className="h-4 w-4 text-primary-foreground" aria-hidden />
         </div>
         <div className="hidden sm:block">
           <p className="text-sm font-semibold tracking-tight leading-tight">${projectName}</p>
-          <p className="text-[10px] text-muted-foreground leading-tight">Onchain AI Agent</p>
+          <p className="text-xs text-muted-foreground leading-tight mt-0.5">Onchain AI Agent</p>
         </div>
       </Link>
 
-      <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-thin" aria-label="Main navigation">
+      <nav className="flex items-center gap-1 overflow-x-auto scrollbar-thin" aria-label="Main navigation">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/" && pathname.startsWith(href));
           return (
@@ -1920,9 +2048,9 @@ export function Header() {
               key={href}
               href={href}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
+                "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap",
                 active
-                  ? "bg-primary/10 text-primary"
+                  ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               )}
               aria-current={active ? "page" : undefined}
@@ -1936,7 +2064,7 @@ export function Header() {
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <LocalFaucetButton />
         <SwarmAgentPicker className="hidden sm:flex shrink-0" />
         <ConnectWalletButton />
@@ -2090,7 +2218,7 @@ export default function Home() {
   }, [messages, isLoading]);
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 49px)" }}>
+    <div className="${PAGE_SHELL}">
       {error &&
         (() => {
           const raw = error.message;
@@ -2111,7 +2239,7 @@ export default function Home() {
           const oneclawish = /oneclaw|shroud|oneclaw_agent|x-shroud/.test(t);
           return (
             <div
-              className="px-6 py-3 text-sm text-destructive bg-destructive/10 border-b border-border space-y-2"
+              className="px-6 sm:px-8 py-4 text-sm text-destructive bg-destructive/10 border-b border-border space-y-2"
               role="alert"
             >
               <p className="whitespace-pre-wrap font-medium">{display}</p>
@@ -2171,21 +2299,21 @@ export default function Home() {
 
       <main
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin"
+        className="flex flex-1 flex-col min-h-0 overflow-y-auto px-4 sm:px-6 scrollbar-thin"
         aria-label="Chat conversation"
       >
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-4">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Bot className="h-8 w-8 text-primary" />
+        {messages.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-8 text-center px-4 py-8 mx-auto w-full max-w-3xl">
+            <div className="h-20 w-20 rounded-2xl bg-primary/10 ring-1 ring-primary/15 flex items-center justify-center">
+              <Bot className="h-9 w-9 text-primary" />
             </div>
-            <div>
-              <p className="text-lg font-semibold tracking-tight">How can I help you?</p>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+            <div className="space-y-2">
+              <p className="text-xl font-semibold tracking-tight">How can I help you?</p>
+              <p className="text-sm text-muted-foreground max-w-md leading-relaxed mx-auto">
                 I can interact with smart contracts, send transactions, and manage on-chain operations.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
               {[
                 "What contracts are deployed?",
                 "Check my wallet balance",
@@ -2198,43 +2326,44 @@ export default function Home() {
                   onClick={() => {
                     handleInputChange({ target: { value: prompt } } as React.ChangeEvent<HTMLInputElement>);
                   }}
-                  className="rounded-lg border border-border bg-card px-3 py-2.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  className="rounded-xl border border-border bg-card px-4 py-3.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-primary/20 transition-colors shadow-sm text-center"
                 >
                   {prompt}
                 </button>
               ))}
             </div>
           </div>
-        )}
+        ) : (
+        <div className="mx-auto w-full max-w-3xl space-y-8 py-8">
         {messages.map((m) => (
-          <div key={m.id} className={\`flex gap-3 \${m.role === "user" ? "justify-end" : "justify-start"}\`}>
+          <div key={m.id} className={\`flex gap-4 \${m.role === "user" ? "justify-end" : "justify-start"}\`}>
             {m.role !== "user" && (
-              <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="h-8 w-8 rounded-xl bg-muted flex items-center justify-center shrink-0 mt-1">
+                <Bot className="h-4 w-4 text-muted-foreground" />
               </div>
             )}
             <div
-              className={\`max-w-[75%] rounded-2xl px-4 py-3 \${
+              className={\`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 \${
                 m.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-card border border-border shadow-sm"
               }\`}
             >
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
             </div>
             {m.role === "user" && (
-              <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0 mt-0.5">
-                <User className="h-3.5 w-3.5 text-primary-foreground" />
+              <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center shrink-0 mt-1 shadow-sm">
+                <User className="h-4 w-4 text-primary-foreground" />
               </div>
             )}
           </div>
         ))}
         {isLoading && messages[messages.length - 1]?.role === "user" && (
-          <div className="flex gap-3 justify-start" aria-live="polite" aria-busy="true">
-            <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          <div className="flex gap-4 justify-start" aria-live="polite" aria-busy="true">
+            <div className="h-8 w-8 rounded-xl bg-muted flex items-center justify-center shrink-0 mt-1">
+              <Bot className="h-4 w-4 text-muted-foreground" aria-hidden />
             </div>
-            <div className="bg-muted rounded-2xl px-4 py-3">
+            <div className="bg-card border border-border shadow-sm rounded-2xl px-5 py-3.5">
               <div className="flex space-x-1.5" aria-label="Assistant is typing">
                 <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0ms]" />
                 <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:150ms]" />
@@ -2243,13 +2372,16 @@ export default function Home() {
             </div>
           </div>
         )}
+        </div>
+        )}
       </main>
 
       <form
         onSubmit={handleSubmit}
-        className="border-t border-border bg-card/50 backdrop-blur-sm p-4 flex gap-3"
+        className="border-t border-border bg-card/60 backdrop-blur-md px-4 sm:px-6 py-5 shrink-0"
         aria-label="Send a message to the agent"
       >
+        <div className="mx-auto flex w-full max-w-3xl gap-3">
         <Input
           value={input}
           onChange={handleInputChange}
@@ -2268,6 +2400,7 @@ export default function Home() {
         >
           <SendHorizontal className="h-4 w-4" aria-hidden />
         </Button>
+        </div>
       </form>
     </div>
   );
@@ -2302,14 +2435,14 @@ export default function DebugPage() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+    <div className="${PAGE_SHELL}">
+      <div className="${PAGE_HEADER}">
+        <div className="${PAGE_HEADER_ICON}">
           <Bug className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold">Debug contracts</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="${PAGE_HEADER_TITLE}">Debug contracts</h1>
+          <p className="${PAGE_HEADER_SUBTITLE}">
             Deployed addresses &amp; ABI via{" "}
             <a
               href="https://github.com/scaffold-eth/scaffold-ui"
@@ -2323,9 +2456,9 @@ export default function DebugPage() {
         </div>
       </div>
 
-      <main className="flex-1 py-8 max-w-7xl mx-auto w-full space-y-10 px-4 lg:px-10 scaffold-ui-debug" data-theme="dark">
+      <main className="${PAGE_MAIN_FULL} scaffold-ui-debug" data-theme="dark">
         {entries.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground space-y-2">
+          <div className="${PAGE_CARD} text-center text-sm text-muted-foreground space-y-3">
             <p>No deployed contracts in <code className="bg-muted px-1 rounded">deployedContracts.ts</code> yet.</p>
             <p>Run: <code className="bg-muted px-1 rounded">just chain</code> → <code className="bg-muted px-1 rounded">just fund</code> → <code className="bg-muted px-1 rounded">just deploy</code></p>
           </div>
@@ -2334,8 +2467,15 @@ export default function DebugPage() {
             const chainId = Number(chainIdStr);
             const explorer = blockExplorerForChain(chainId);
             return (
-              <section key={chainIdStr} className="space-y-8">
-                <h2 className="text-lg font-semibold text-foreground">Chain {chainIdStr}</h2>
+              <section key={chainIdStr} className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/25">
+                    Chain {chainIdStr}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {(Object.values(NETWORKS) as NetworkDefinition[]).find((x) => x.chainId === chainId)?.name ?? "Unknown"}
+                  </span>
+                </div>
                 {Object.entries(contracts).map(([name, meta]) => (
                   <Contract
                     key={name}
@@ -3223,6 +3363,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={\`dark \${inter.variable}\`}>
       <body className={inter.className}>
         <Providers>
+          <div className="flex min-h-dvh flex-col">
           <a
             href="#site-main"
             className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
@@ -3230,8 +3371,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Skip to main content
           </a>
           <Header />
-          <div id="site-main" className="min-h-screen">
+          <div id="site-main" className="flex flex-1 flex-col min-h-0">
             {children}
+          </div>
           </div>
         </Providers>
       </body>

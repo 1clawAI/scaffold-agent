@@ -2,6 +2,17 @@
  * Generated `/balances` page — agent env address + connected wallet, via POST /api/balances.
  */
 
+import {
+  PAGE_CARD,
+  PAGE_CARD_TITLE,
+  PAGE_HEADER,
+  PAGE_HEADER_ICON,
+  PAGE_HEADER_SUBTITLE,
+  PAGE_HEADER_TITLE,
+  PAGE_MAIN,
+  PAGE_SHELL,
+} from "./page-layout.js";
+
 export type BalancesPageFramework = "next" | "vite";
 
 export function balancesPageSource(framework: BalancesPageFramework): string {
@@ -48,17 +59,17 @@ function BalancesCard({
 }) {
   if (!address) {
     return (
-      <section className="rounded-lg border border-border bg-card p-5 space-y-2">
-        <h2 className="text-sm font-medium">{title}</h2>
-        <p className="text-sm text-muted-foreground">No address configured or connected.</p>
+      <section className="${PAGE_CARD}">
+        <h2 className="${PAGE_CARD_TITLE}">{title}</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">No address configured or connected.</p>
       </section>
     );
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-      <h2 className="text-sm font-medium">{title}</h2>
-      <p className="text-xs font-mono break-all text-muted-foreground">{address}</p>
+    <section className="${PAGE_CARD}">
+      <h2 className="${PAGE_CARD_TITLE}">{title}</h2>
+      <p className="text-xs font-mono break-all text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">{address}</p>
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -67,8 +78,8 @@ function BalancesCard({
       ) : error ? (
         <p className="text-sm text-destructive whitespace-pre-wrap">{error}</p>
       ) : data ? (
-        <ul className="space-y-2 text-sm">
-          <li className="flex justify-between gap-4 border-b border-border pb-2">
+        <ul className="space-y-3 text-sm">
+          <li className="flex justify-between gap-4 border-b border-border pb-3">
             <span className="text-muted-foreground">{data.native.symbol}</span>
             <span className="font-mono">{data.native.balance}</span>
           </li>
@@ -149,21 +160,21 @@ export default function BalancesPage() {
   }, [loadWallet]);
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+    <div className="${PAGE_SHELL}">
+      <div className="${PAGE_HEADER}">
+        <div className="${PAGE_HEADER_ICON}">
           <Wallet className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold">Balances</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="${PAGE_HEADER_TITLE}">Balances</h1>
+          <p className="${PAGE_HEADER_SUBTITLE}">
             Active network: {net.name} ({net.chainId})
           </p>
         </div>
       </div>
 
-      <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-6">
-        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+      <main className="${PAGE_MAIN}">
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
           <Button type="button" variant="secondary" size="sm" onClick={() => void loadAgent()}>
             Refresh agent
           </Button>
@@ -172,7 +183,7 @@ export default function BalancesPage() {
           </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-1">
+        <div className="grid gap-8 md:grid-cols-1">
           <BalancesCard
             title="Agent wallet"
             address={agentAddress || null}

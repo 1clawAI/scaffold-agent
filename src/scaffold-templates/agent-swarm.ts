@@ -3,6 +3,17 @@
  * Works for single-agent (one row) or swarm (header selector when length > 1).
  */
 
+import {
+  PAGE_CARD,
+  PAGE_CARD_TITLE,
+  PAGE_HEADER,
+  PAGE_HEADER_ICON,
+  PAGE_HEADER_SUBTITLE,
+  PAGE_HEADER_TITLE,
+  PAGE_MAIN,
+  PAGE_SHELL,
+} from "./page-layout.js";
+
 export type AgentSwarmTemplateFramework = "next" | "vite";
 
 export function agentSwarmContextSource(
@@ -205,29 +216,29 @@ export default function SwarmPage() {
   }, [pk, addr]);
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+    <div className="${PAGE_SHELL}">
+      <div className="${PAGE_HEADER}">
+        <div className="${PAGE_HEADER_ICON}">
           <Users className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold tracking-tight">Swarm</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="${PAGE_HEADER_TITLE}">Swarm</h1>
+          <p className="${PAGE_HEADER_SUBTITLE}">
             On-chain agent wallets — add more with{" "}
-            <code className="rounded bg-muted px-1">just swarm agents=N</code>
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">just swarm agents=N</code>
           </p>
         </div>
       </div>
 
-      <main className="flex-1 p-6 max-w-lg mx-auto w-full space-y-6">
-        <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-          <h2 className="text-sm font-medium">Configured agents</h2>
+      <main className="${PAGE_MAIN}">
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Configured agents</h2>
           {roster.length === 0 ? (
             <p className="text-sm text-muted-foreground">No agents.json entries yet.</p>
           ) : (
-            <ul className="space-y-2 text-sm font-mono text-xs">
+            <ul className="space-y-3 text-sm font-mono text-xs">
               {roster.map((a) => (
-                <li key={a.id} className="flex flex-col gap-0.5 border-b border-border pb-2 last:border-0">
+                <li key={a.id} className="flex flex-col gap-1 border-b border-border pb-3 last:border-0 last:pb-0">
                   <span className="text-foreground">{a.id}</span>
                   <span className="text-muted-foreground break-all">{a.address}</span>
                   {a.preset ? (
@@ -239,8 +250,8 @@ export default function SwarmPage() {
           )}
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-          <h2 className="text-sm font-medium">Generate locally (browser)</h2>
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Generate locally (browser)</h2>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Creates a key in memory only. To persist, merge the private key into encrypted secrets and
             update <code className="rounded bg-muted px-1">public/agents.json</code> — use{" "}

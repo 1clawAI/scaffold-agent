@@ -6,6 +6,17 @@
  * etc.); this page guides users through app.ens.domains with the agent address ready to copy.
  */
 
+import {
+  PAGE_CARD,
+  PAGE_CARD_TITLE,
+  PAGE_HEADER,
+  PAGE_HEADER_ICON,
+  PAGE_HEADER_SUBTITLE,
+  PAGE_HEADER_TITLE,
+  PAGE_MAIN,
+  PAGE_SHELL,
+} from "./page-layout.js";
+
 export type EnsPageFramework = "next" | "vite";
 
 export function ensPageSource(
@@ -83,29 +94,29 @@ export default function EnsPage() {
   const docsEnsSubnames = "https://docs.ens.domains/web/subdomains";
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+    <div className="${PAGE_SHELL}">
+      <div className="${PAGE_HEADER}">
+        <div className="${PAGE_HEADER_ICON}">
           <BadgeCheck className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold">ENS for your agent</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="${PAGE_HEADER_TITLE}">ENS for your agent</h1>
+          <p className="${PAGE_HEADER_SUBTITLE}">
             Names and subnames for{" "}
             <span className="font-medium text-foreground">${projectName}</span>
           </p>
         </div>
       </div>
 
-      <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-8">
-        <p className="text-sm text-muted-foreground">
+      <main className="${PAGE_MAIN}">
+        <p className="text-sm text-muted-foreground leading-relaxed">
           <strong className="text-foreground">.eth</strong> registration and most subname flows
           run on <strong className="text-foreground">Ethereum mainnet</strong>, even if your agent
           uses another chain for dApps. Resolution below uses mainnet (chain ID {mainnet.id}).
         </p>
 
-        <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-          <h2 className="text-sm font-medium">Agent wallet</h2>
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Agent wallet</h2>
           {!agentAddress ? (
             <p className="text-sm text-muted-foreground">
               No valid agent address in env. Set{" "}
@@ -116,7 +127,7 @@ export default function EnsPage() {
             </p>
           ) : (
             <>
-              <div className="flex items-center gap-2 font-mono text-xs break-all bg-muted/50 rounded-md px-3 py-2">
+              <div className="flex items-center gap-2 font-mono text-xs break-all bg-muted/40 rounded-lg px-3 py-2.5">
                 <span className="flex-1">{agentAddress}</span>
                 <CopyBtn text={agentAddress} />
               </div>
@@ -150,8 +161,8 @@ export default function EnsPage() {
           )}
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-          <h2 className="text-sm font-medium">Your connected wallet</h2>
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Your connected wallet</h2>
           {!walletAddress ? (
             <p className="text-sm text-muted-foreground">
               Connect a wallet to see its primary ENS name and get a shortcut to create a{" "}
@@ -209,7 +220,7 @@ export default function EnsPage() {
           )}
         </section>
 
-        <p className="text-xs text-muted-foreground border-t border-border pt-6">
+        <p className="text-xs text-muted-foreground border-t border-border pt-8 leading-relaxed">
           In-app, one-click subname registration would require integrating ENS contracts (e.g.
           NameWrapper) and several transactions; this page keeps the flow simple and uses the
           official ENS app where gas and steps are handled for you.

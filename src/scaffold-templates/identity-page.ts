@@ -4,6 +4,17 @@
  * @see https://sdk.ag0.xyz/docs
  */
 
+import {
+  PAGE_CARD,
+  PAGE_CARD_TITLE,
+  PAGE_HEADER,
+  PAGE_HEADER_ICON,
+  PAGE_HEADER_SUBTITLE,
+  PAGE_HEADER_TITLE,
+  PAGE_MAIN,
+  PAGE_SHELL,
+} from "./page-layout.js";
+
 export type IdentityPageFramework = "next" | "vite";
 
 export function identityPageSource(
@@ -201,14 +212,14 @@ export default function IdentityPage() {
   const wrongChain = Boolean(connected && walletChainId !== chainId);
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+    <div className="${PAGE_SHELL}">
+      <div className="${PAGE_HEADER}">
+        <div className="${PAGE_HEADER_ICON}">
           <Fingerprint className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold">Agent identity</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="${PAGE_HEADER_TITLE}">Agent identity</h1>
+          <p className="${PAGE_HEADER_SUBTITLE}">
             ERC-8004 via{" "}
             <a
               href="https://sdk.ag0.xyz/docs"
@@ -222,9 +233,9 @@ export default function IdentityPage() {
         </div>
       </div>
 
-      <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-8">
-        <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-          <h2 className="text-sm font-medium">Configured agent wallet</h2>
+      <main className="${PAGE_MAIN}">
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Configured agent wallet</h2>
           {!agentAddress ? (
             <p className="text-sm text-muted-foreground">
               No agent address in env. Generate an agent wallet (scaffold with agent identity, or{" "}
@@ -235,7 +246,7 @@ export default function IdentityPage() {
               to match <code className="rounded bg-muted px-1">AGENT_ADDRESS</code>.
             </p>
           ) : (
-            <div className="flex items-center gap-2 font-mono text-xs break-all bg-muted/50 rounded-md px-3 py-2">
+            <div className="flex items-center gap-2 font-mono text-xs break-all bg-muted/40 rounded-lg px-3 py-2.5">
               <span className="flex-1">{agentAddress}</span>
               <CopyBtn text={agentAddress} />
             </div>
@@ -255,8 +266,8 @@ export default function IdentityPage() {
           </p>
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-5 space-y-3">
-          <h2 className="text-sm font-medium">Registry lookup</h2>
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Registry lookup</h2>
           <p className="text-xs text-muted-foreground">
             Searches Agent0 for agents owned by your{" "}
             <code className="rounded bg-muted px-1">AGENT_ADDRESS</code>{" "}
@@ -277,11 +288,11 @@ export default function IdentityPage() {
               Sepolia / Base Sepolia for discovery.
             </p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {agents.map((a) => (
                 <li
                   key={\`\${a.chainId}:\${a.agentId}\`}
-                  className="rounded-md border border-border p-3 text-sm space-y-1"
+                  className="rounded-lg border border-border bg-muted/20 p-4 text-sm space-y-1.5"
                 >
                   <div className="font-medium">{a.name}</div>
                   <div className="text-xs text-muted-foreground font-mono">
@@ -297,8 +308,8 @@ export default function IdentityPage() {
           )}
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-5 space-y-4">
-          <h2 className="text-sm font-medium">Register (browser wallet)</h2>
+        <section className="${PAGE_CARD}">
+          <h2 className="${PAGE_CARD_TITLE}">Register (browser wallet)</h2>
           <p className="text-xs text-muted-foreground">
             Uses <code className="rounded bg-muted px-1">registerOnChain()</code> (compact on-chain
             registration). Your <strong>connected wallet</strong> pays gas and will{" "}
