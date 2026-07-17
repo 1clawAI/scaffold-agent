@@ -66,6 +66,23 @@ const popularWallets = [
   walletConnectWallet,
 ];
 
+const wagmiChains = [hardhat, sepolia, baseSepolia, base, mainnet, polygon, bsc] as const;
+
+/** RainbowKit uses \`transports || defaults\` — a partial map leaves other chains undefined and breaks wagmi. */
+const wagmiTransports = wagmiChains.reduce(
+  (acc, chain) => {
+    if (chain.id === mainnet.id) {
+      acc[chain.id] = http("https://ethereum.publicnode.com");
+    } else if (chain.id === hardhat.id && targetNetwork === "localhost") {
+      acc[chain.id] = http(getActiveNetwork().rpcUrl);
+    } else {
+      acc[chain.id] = http();
+    }
+    return acc;
+  },
+  {} as Record<number, ReturnType<typeof http>>,
+);
+
 /**
  * Reown / WalletConnect Cloud project id.
  * If unset in .env, uses the scaffold default; override with
@@ -75,12 +92,9 @@ const popularWallets = [
 export const wagmiConfig = getDefaultConfig({
   appName: ${JSON.stringify(projectName)},
   projectId: projectId || DEFAULT_REOWN_PROJECT_ID,
-  chains: [hardhat, sepolia, baseSepolia, base, mainnet, polygon, bsc],
+  chains: [...wagmiChains],
   ssr: false,
-  transports: {
-    /** Reliable mainnet RPC for Scaffold UI USD price reads (Balance / EtherInput). */
-    [mainnet.id]: http("https://ethereum.publicnode.com"),
-  },
+  transports: wagmiTransports,
   wallets: [
     {
       groupName: "Popular",
