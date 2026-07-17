@@ -61,9 +61,22 @@ import { graphClientSource } from "../scaffold-templates/graph-client.js";
 
 /** Ampersend SDK version pinned for generated Next/Vite apps (see npm). */
 const AMPERSEND_SDK_VERSION = "0.0.14";
-/** x402 packages — transitive deps of ampersend-sdk but listed explicitly for the payment fetch flow. */
-const X402_FETCH_VERSION = "^2.11.0";
-const X402_CORE_VERSION = "^2.11.0";
+/** x402 packages — ampersend-sdk + RainbowKit baseAccount (@coinbase/cdp-sdk peer deps). */
+const X402_FETCH_VERSION = "^2.18.0";
+const X402_CORE_VERSION = "^2.18.0";
+const X402_SVM_VERSION = "^2.18.0";
+const X402_EVM_VERSION = "^2.18.0";
+const X402_EXTENSIONS_VERSION = "^2.18.0";
+
+/** Peer deps for RainbowKit baseAccount wallet → @coinbase/cdp-sdk (must resolve at build time). */
+function x402WalletPeerDeps(): Record<string, string> {
+  return {
+    "@x402/core": X402_CORE_VERSION,
+    "@x402/svm": X402_SVM_VERSION,
+    "@x402/evm": X402_EVM_VERSION,
+    "@x402/extensions": X402_EXTENSIONS_VERSION,
+  };
+}
 
 /** 1Claw SDK version pinned for generated Next/Vite apps (vault reads in chat routes). */
 const ONECLAW_SDK_VERSION = "0.41.2";
@@ -293,7 +306,7 @@ function writeRootFiles(root: string, config: ScaffoldConfig) {
     if (config.installAmpersendSdk) {
       rootDevDeps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
       rootDevDeps["@x402/fetch"] = X402_FETCH_VERSION;
-      rootDevDeps["@x402/core"] = X402_CORE_VERSION;
+      Object.assign(rootDevDeps, x402WalletPeerDeps());
     }
   }
 
@@ -2904,6 +2917,7 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
     "@scaffold-ui/debug-contracts": SCAFFOLD_UI_DEBUG_CONTRACTS_VERSION,
     "@heroicons/react": "^2.2.0",
     "react-hot-toast": "^2.6.0",
+    ...x402WalletPeerDeps(),
   };
 
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
@@ -2915,7 +2929,6 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
     deps["@x402/fetch"] = X402_FETCH_VERSION;
-    deps["@x402/core"] = X402_CORE_VERSION;
   }
 
   file(
@@ -3722,6 +3735,7 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
     "@tanstack/react-query": "^5.62.0",
     "@rainbow-me/rainbowkit": "^2.2.0",
     "burner-connector": "^0.0.20",
+    ...x402WalletPeerDeps(),
   };
 
   if (config.llm === "oneclaw" || config.secrets.mode === "oneclaw") {
@@ -3733,7 +3747,6 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
     deps["@x402/fetch"] = X402_FETCH_VERSION;
-    deps["@x402/core"] = X402_CORE_VERSION;
   }
 
   file(
