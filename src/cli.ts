@@ -392,7 +392,7 @@ async function main() {
       if (graphApiKey) {
         success(
           secrets.mode === "oneclaw"
-            ? "Graph API key will be stored in 1Claw vault (api-keys/graph)"
+            ? "Graph API key will be stored in 1Claw vault (api-keys/thegraph)"
             : "Graph API key will be stored in .env.secrets.encrypted (GRAPH_API_KEY)",
         );
       } else {

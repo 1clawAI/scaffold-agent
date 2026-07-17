@@ -25,6 +25,7 @@ export const ENV_SECRET_KEY_NAMES = [
   "ANTHROPIC_API_KEY",
   "SHROUD_PROVIDER_API_KEY",
   "AMPERSEND_SIGNING_KEY",
+  "GRAPH_API_KEY",
 ] as const;
 
 const SECRET_KEYS = new Set<string>(ENV_SECRET_KEY_NAMES as unknown as string[]);

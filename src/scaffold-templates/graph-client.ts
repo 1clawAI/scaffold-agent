@@ -154,13 +154,25 @@ async function queryViaX402(
 }
 `;
 
+  const graphApiKeyResolver = opts.includeOneclaw
+    ? `
+/** Studio API key — env GRAPH_API_KEY or 1Claw vault secret api-keys/thegraph. */
+async function resolveGraphApiKey(): Promise<string | null> {
+  const fromEnv = (process.env.GRAPH_API_KEY || "").trim();
+  if (fromEnv) return fromEnv;
+  return readVaultSecret("api-keys/thegraph");
+}
+`
+    : `
+async function resolveGraphApiKey(): Promise<string | null> {
+  return (process.env.GRAPH_API_KEY || "").trim() || null;
+}
+`;
+
   return `/** The Graph Network registry subgraph (Arbitrum) — used for keyword search. */
 const GRAPH_NETWORK_SUBGRAPH_ID = "4sukbPwJS2fkV4ziF9xF67i1c8x9W2w1g4H6uMqkXWx";
 ${keyResolution}
-function resolveGraphApiKey(): string | null {
-  return (process.env.GRAPH_API_KEY || "").trim() || null;
-}
-
+${graphApiKeyResolver}
 /** base (mainnet) or base-sepolia (testnet) — matches The Graph x402 docs (X402_CHAIN). */
 function resolveX402Chain(): "base" | "base-sepolia" {
   const chain = (process.env.X402_CHAIN || "").trim().toLowerCase();
@@ -181,7 +193,7 @@ async function queryViaApiKey(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<unknown | null> {
-  const apiKey = resolveGraphApiKey();
+  const apiKey = await resolveGraphApiKey();
   if (!apiKey) return null;
 
   const gateway = graphGatewayBase();
@@ -213,7 +225,7 @@ async function runGraphQL(
     const viaKey = await queryViaApiKey(subgraphId, query, variables);
     if (viaKey !== null) return viaKey;
   } catch (err) {
-    if (!resolveGraphApiKey()) throw err;
+    if (!(await resolveGraphApiKey())) throw err;
   }
   return queryViaX402(subgraphId, query, variables);
 }

@@ -209,7 +209,7 @@ export async function setupOneClaw(
     shroudEnabled?: boolean;
     /** Ampersend signing key from ampersend.ai — stored at private-keys/ampersend-signing */
     ampersendSigningKey?: string;
-    /** The Graph API key — stored at api-keys/graph */
+    /** The Graph API key — stored at api-keys/thegraph */
     graphApiKey?: string;
     /** Chains to provision HSM signing keys for (when Intents enabled). */
     signingChains?: string[];
@@ -272,7 +272,7 @@ export async function setupOneClaw(
     await storeSecret(
       token,
       vaultId,
-      "api-keys/graph",
+      "api-keys/thegraph",
       options.graphApiKey.trim(),
       "api_key",
     );
