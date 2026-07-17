@@ -3200,7 +3200,7 @@ const nextConfig = {
       tls: nodeBuiltinStubRel,
       dns: nodeBuiltinStubRel,
       child_process: nodeBuiltinStubRel,
-      path: nodeBuiltinStubRel,
+      // Do not alias path — Turbopack applies resolveAlias on SSR too; Next.js metadata needs real path.join.
       "@react-native-async-storage/async-storage": "./lib/stub-async-storage.cjs",
       "pino-pretty": "./lib/stub-pino-pretty.cjs",
     },
