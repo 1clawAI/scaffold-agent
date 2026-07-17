@@ -183,15 +183,21 @@ export async function promptOneclawSigningChains(): Promise<OneclawSigningChain[
 
 export async function promptIdentity(useOneClaw: boolean): Promise<boolean> {
   return select<boolean>({
-    message: "Generate Agent Identity?",
+    message: "Generate Deployment Key for Ethereum?",
     choices: [
       {
         value: true,
         name: useOneClaw
-          ? "Yes (via 1Claw — generate agent & associate with your account)"
+          ? "Yes — local deployer key + 1Claw HSM signing key (via Intents)"
           : "Yes (generate locally)",
+        description: useOneClaw
+          ? "Generates a deployer key for contract deployment; 1Claw provisions the agent signing key on hardware (HSM)"
+          : "Generates a local Ethereum key pair for deploying contracts",
       },
-      { value: false, name: "No" },
+      {
+        value: false,
+        name: "No — I'll provide keys later",
+      },
     ],
   });
 }

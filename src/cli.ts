@@ -386,7 +386,8 @@ async function main() {
       info("MCP:      Subgraph MCP server → .cursor/mcp.json + .mcp.json (IDE time)");
     }
     if (graphIntegration === "x402" || graphIntegration === "both") {
-      info("x402:     Agent queries subgraphs at runtime, paying per-query in USDC");
+      info("x402:     Agent wallet (AGENT_ADDRESS) pays per-query in USDC on Base");
+      info("          Fund it: bridge USDC to Base → send to AGENT_ADDRESS");
       info("Guide:    https://thegraph.com/docs/en/subgraphs/tooling/x402-payments/");
       if (graphApiKey) {
         success(

@@ -11,7 +11,7 @@ export function graphClientSource(opts: {
     ? `
 /**
  * x402 signing key — reuses Ampersend signing key when available,
- * falls back to X402_PRIVATE_KEY env var.
+ * falls back to AGENT_PRIVATE_KEY (fund with USDC on Base).
  */
 async function resolveX402Key(): Promise<string> {
   const fromX402 = (process.env.X402_PRIVATE_KEY || "").trim();
@@ -24,8 +24,11 @@ ${opts.includeOneclaw ? `
   const fromVault = await readVaultSecret("private-keys/ampersend-signing");
   if (fromVault) return fromVault;
 ` : ""}
+  const agentKey = (process.env.AGENT_PRIVATE_KEY || "").trim();
+  if (agentKey) return agentKey;
+
   throw new Error(
-    "No x402 signing key found. Set X402_PRIVATE_KEY or AMPERSEND_SIGNING_KEY in .env",
+    "No x402 signing key found. Set AGENT_PRIVATE_KEY (default), X402_PRIVATE_KEY, or AMPERSEND_SIGNING_KEY in .env",
   );
 }
 `
@@ -76,26 +79,41 @@ async function readVaultSecret(secretPath: string): Promise<string | null> {
   return typeof j.value === "string" ? j.value.trim() : null;
 }
 
+/**
+ * x402 payment key — defaults to the agent wallet (AGENT_PRIVATE_KEY).
+ * Fund this address with USDC on Base to pay for subgraph queries.
+ * Override with X402_PRIVATE_KEY or vault secret private-keys/agent.
+ */
 async function resolveX402Key(): Promise<string> {
-  const fromEnv = (process.env.X402_PRIVATE_KEY || "").trim();
-  if (fromEnv) return fromEnv;
+  const fromX402 = (process.env.X402_PRIVATE_KEY || "").trim();
+  if (fromX402) return fromX402;
 
-  const fromVault = await readVaultSecret("private-keys/x402-signing");
+  const agentKey = (process.env.AGENT_PRIVATE_KEY || "").trim();
+  if (agentKey) return agentKey;
+
+  const fromVault = await readVaultSecret("private-keys/agent");
   if (fromVault) return fromVault;
 
   throw new Error(
-    "X402_PRIVATE_KEY not found in env or 1Claw vault (private-keys/x402-signing). " +
-      "Store it: just vault private-keys/x402-signing '0x...'",
+    "No x402 payment key found. AGENT_PRIVATE_KEY is the default payer — " +
+      "fund it with USDC on Base. Or set X402_PRIVATE_KEY for a dedicated payer.",
   );
 }
 `
       : `
+/**
+ * x402 payment key — defaults to the agent wallet (AGENT_PRIVATE_KEY).
+ * Fund this address with USDC on Base to pay for subgraph queries.
+ */
 async function resolveX402Key(): Promise<string> {
-  const fromEnv = (process.env.X402_PRIVATE_KEY || "").trim();
-  if (fromEnv) return fromEnv;
+  const fromX402 = (process.env.X402_PRIVATE_KEY || "").trim();
+  if (fromX402) return fromX402;
+
+  const agentKey = (process.env.AGENT_PRIVATE_KEY || "").trim();
+  if (agentKey) return agentKey;
 
   throw new Error(
-    "X402_PRIVATE_KEY is not set. Add it via .env",
+    "No x402 payment key found. Set AGENT_PRIVATE_KEY (default payer — fund with USDC on Base) or X402_PRIVATE_KEY.",
   );
 }
 `;
