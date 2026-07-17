@@ -1,11 +1,12 @@
 /**
- * Generated `lib/graph-client.ts` — The Graph x402 subgraph query client.
- * Pays per-query in USDC via x402 — no API key required for small volumes.
- * Optional GRAPH_API_KEY for high-volume fallback via the hosted gateway.
+ * Generated `lib/graph-client.ts` — The Graph gateway client.
+ * Uses GRAPH_API_KEY (Bearer) when set; otherwise x402 via @graphprotocol/client-x402.
+ * @see https://thegraph.com/docs/en/subgraphs/tooling/x402-payments/
  */
 export function graphClientSource(opts: {
   includeOneclaw: boolean;
   hasAmpersend: boolean;
+  enableX402: boolean;
 }): string {
   const keyResolution = opts.hasAmpersend
     ? `
@@ -118,120 +119,142 @@ async function resolveX402Key(): Promise<string> {
 }
 `;
 
-  return `import { createWalletClient, http, type Hex } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { base } from "viem/chains";
+  const x402Block = opts.enableX402
+    ? `
+async function queryViaX402(
+  subgraphId: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<unknown> {
+  const { createGraphQuery } = await import("@graphprotocol/client-x402");
+  const gateway = graphGatewayBase();
+  const endpoint = \`\${gateway}/api/x402/subgraphs/id/\${subgraphId}\`;
+  const privateKey = await resolveX402Key();
+  const gql = createGraphQuery({
+    endpoint,
+    privateKey,
+    chain: resolveX402Chain(),
+  });
+  const result = await gql(query, variables);
+  if (result.errors?.length) {
+    throw new Error(result.errors.map((e) => e.message).join("; "));
+  }
+  return result;
+}
+`
+    : `
+async function queryViaX402(
+  _subgraphId: string,
+  _query: string,
+  _variables?: Record<string, unknown>,
+): Promise<unknown> {
+  throw new Error(
+    "x402 Graph queries are disabled. Enable --graph x402|both or set GRAPH_API_KEY from Subgraph Studio.",
+  );
+}
+`;
 
-const GRAPH_GATEWAY = "https://gateway.thegraph.com";
-const X402_CHAIN_ID = Number(process.env.X402_CHAIN_ID || "8453");
+  return `/** The Graph Network registry subgraph (Arbitrum) — used for keyword search. */
+const GRAPH_NETWORK_SUBGRAPH_ID = "4sukbPwJS2fkV4ziF9xF67i1c8x9W2w1g4H6uMqkXWx";
 ${keyResolution}
-/**
- * Resolve optional Graph API key — for high-volume hosted gateway fallback.
- */
 function resolveGraphApiKey(): string | null {
   return (process.env.GRAPH_API_KEY || "").trim() || null;
 }
 
-/**
- * Query a subgraph on The Graph Network using x402 payment.
- * Falls back to API-key gateway if GRAPH_API_KEY is set and x402 fails.
- */
+/** base (mainnet) or base-sepolia (testnet) — matches The Graph x402 docs (X402_CHAIN). */
+function resolveX402Chain(): "base" | "base-sepolia" {
+  const chain = (process.env.X402_CHAIN || "").trim().toLowerCase();
+  if (chain === "base-sepolia" || chain === "base_sepolia") return "base-sepolia";
+  if (chain === "base") return "base";
+  const id = Number(process.env.X402_CHAIN_ID || "8453");
+  return id === 84532 ? "base-sepolia" : "base";
+}
+
+function graphGatewayBase(): string {
+  return resolveX402Chain() === "base-sepolia"
+    ? "https://testnet.gateway.thegraph.com"
+    : "https://gateway.thegraph.com";
+}
+
+async function queryViaApiKey(
+  subgraphId: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<unknown | null> {
+  const apiKey = resolveGraphApiKey();
+  if (!apiKey) return null;
+
+  const gateway = graphGatewayBase();
+  const res = await fetch(\`\${gateway}/api/subgraphs/id/\${subgraphId}\`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: \`Bearer \${apiKey}\`,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const json = (await res.json()) as { data?: unknown; errors?: { message: string }[] };
+  if (!res.ok) {
+    throw new Error(\`Graph API key query failed: \${res.status} \${JSON.stringify(json)}\`);
+  }
+  if (json.errors?.length) {
+    throw new Error(json.errors.map((e) => e.message).join("; "));
+  }
+  return json;
+}
+${x402Block}
+/** Run GraphQL against a subgraph — API key first, then x402 per-query USDC. */
+async function runGraphQL(
+  subgraphId: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<unknown> {
+  try {
+    const viaKey = await queryViaApiKey(subgraphId, query, variables);
+    if (viaKey !== null) return viaKey;
+  } catch (err) {
+    if (!resolveGraphApiKey()) throw err;
+  }
+  return queryViaX402(subgraphId, query, variables);
+}
+
+/** Query a subgraph on The Graph Network (x402 or GRAPH_API_KEY). */
 export async function querySubgraph(
   subgraphId: string,
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<unknown> {
-  const x402Url = \`\${GRAPH_GATEWAY}/api/subgraphs/id/\${subgraphId}\`;
-  const body = JSON.stringify({ query, variables });
-
-  try {
-    const key = await resolveX402Key();
-    const account = privateKeyToAccount(key as Hex);
-    const walletClient = createWalletClient({
-      account,
-      chain: base,
-      transport: http(),
-    });
-
-    const res = await fetch(x402Url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
-
-    if (res.status === 402) {
-      const paymentHeader = res.headers.get("X-Payment-Request");
-      if (!paymentHeader) throw new Error("402 received but no X-Payment-Request header");
-
-      const paymentReq = JSON.parse(paymentHeader);
-      const signature = await walletClient.signMessage({
-        message: paymentReq.message || paymentReq.payload || "",
-      });
-
-      const payRes = await fetch(x402Url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Payment": signature,
-          "X-Payment-Request": paymentHeader,
-        },
-        body,
-      });
-
-      if (!payRes.ok) {
-        throw new Error(\`Graph x402 query failed after payment: \${payRes.status} \${await payRes.text()}\`);
-      }
-      return await payRes.json();
-    }
-
-    if (!res.ok) throw new Error(\`Graph query failed: \${res.status}\`);
-    return await res.json();
-  } catch (err) {
-    const apiKey = resolveGraphApiKey();
-    if (!apiKey) throw err;
-
-    const fallbackUrl = \`\${GRAPH_GATEWAY}/api/\${apiKey}/subgraphs/id/\${subgraphId}\`;
-    const res = await fetch(fallbackUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
-    if (!res.ok) throw new Error(\`Graph API key fallback failed: \${res.status} \${await res.text()}\`);
-    return await res.json();
-  }
+  return runGraphQL(subgraphId, query, variables);
 }
 
-/**
- * Search for subgraphs by keyword using The Graph's explorer API.
- */
+/** Search subgraphs by keyword via the Graph Network registry subgraph. */
 export async function searchSubgraphs(
   keyword: string,
   first = 5,
 ): Promise<{ id: string; displayName: string; description: string }[]> {
-  const url = "https://api.thegraph.com/subgraphs/name/graphprotocol/graph-network-arbitrum";
+  const escaped = keyword.replace(/"/g, '\\\\"');
   const query = \`{
     subgraphs(
       first: \${first},
-      where: { metadata_: { displayName_contains_nocase: "\${keyword.replace(/"/g, '\\\\"')}" } },
+      where: { metadata_: { displayName_contains_nocase: "\${escaped}" } },
       orderBy: currentSignalledTokens,
       orderDirection: desc
     ) {
       id
       metadata { displayName description }
-      currentVersion { subgraphDeployment { ipfsHash } }
     }
   }\`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) return [];
-  const json = (await res.json()) as {
-    data?: { subgraphs?: { id: string; metadata?: { displayName?: string; description?: string }; currentVersion?: { subgraphDeployment?: { ipfsHash?: string } } }[] };
+  const json = (await runGraphQL(GRAPH_NETWORK_SUBGRAPH_ID, query)) as {
+    data?: {
+      subgraphs?: {
+        id: string;
+        metadata?: { displayName?: string; description?: string };
+      }[];
+    };
   };
-  return (json.data?.subgraphs ?? []).map(s => ({
+
+  return (json.data?.subgraphs ?? []).map((s) => ({
     id: s.id,
     displayName: s.metadata?.displayName || s.id,
     description: s.metadata?.description || "",

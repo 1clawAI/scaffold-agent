@@ -86,6 +86,7 @@ const X402_CORE_VERSION = "^2.18.0";
 const X402_SVM_VERSION = "^2.18.0";
 const X402_EVM_VERSION = "^2.18.0";
 const X402_EXTENSIONS_VERSION = "^2.18.0";
+const GRAPH_CLIENT_X402_VERSION = "^1.0.0";
 
 /** Peer deps for RainbowKit baseAccount wallet → @coinbase/cdp-sdk (must resolve at build time). */
 function x402WalletPeerDeps(): Record<string, string> {
@@ -3039,6 +3040,8 @@ function buildPublicAgentsJson(config: ScaffoldConfig): string {
 // ── NextJS ──────────────────────────────────────────────────────────────────
 
 function scaffoldNextJS(root: string, config: ScaffoldConfig) {
+  const includeGraphX402 =
+    config.graphIntegration === "x402" || config.graphIntegration === "both";
   const pkg = dir(root, "packages", "nextjs");
   dir(pkg, "app", "api", "chat");
   dir(pkg, "app", "api", "agent0", "lookup");
@@ -3089,6 +3092,12 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
     deps["@x402/fetch"] = X402_FETCH_VERSION;
+  }
+  if (includeGraphX402) {
+    deps["@graphprotocol/client-x402"] = GRAPH_CLIENT_X402_VERSION;
+    if (!config.installAmpersendSdk) {
+      deps["@x402/fetch"] = X402_FETCH_VERSION;
+    }
   }
 
   file(
@@ -3265,7 +3274,6 @@ module.exports = nextConfig;
   file(pkg, "components.json", COMPONENTS_JSON);
   file(pkg, "lib/utils.ts", UTILS_TS);
   const includeGraph = config.graphIntegration !== "none";
-  const includeGraphX402 = config.graphIntegration === "x402" || config.graphIntegration === "both";
   file(
     pkg,
     "lib/agent-onchain-tools.ts",
@@ -3282,6 +3290,7 @@ module.exports = nextConfig;
       graphClientSource({
         includeOneclaw: config.secrets.mode === "oneclaw",
         hasAmpersend: config.installAmpersendSdk,
+        enableX402: includeGraphX402,
       }),
     );
   }
@@ -3896,6 +3905,8 @@ function viteApiRoute(
 }
 
 function scaffoldVite(root: string, config: ScaffoldConfig) {
+  const includeGraphX402 =
+    config.graphIntegration === "x402" || config.graphIntegration === "both";
   const pkg = dir(root, "packages", "vite");
   dir(pkg, "src", "components", "ui");
   dir(pkg, "src", "lib");
@@ -3931,6 +3942,12 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
   if (config.installAmpersendSdk) {
     deps["@ampersend_ai/ampersend-sdk"] = AMPERSEND_SDK_VERSION;
     deps["@x402/fetch"] = X402_FETCH_VERSION;
+  }
+  if (includeGraphX402) {
+    deps["@graphprotocol/client-x402"] = GRAPH_CLIENT_X402_VERSION;
+    if (!config.installAmpersendSdk) {
+      deps["@x402/fetch"] = X402_FETCH_VERSION;
+    }
   }
 
   file(
@@ -4062,6 +4079,7 @@ interface ImportMeta {
     file(pkg, "src/lib/graph-client.ts", graphClientSource({
       includeOneclaw: config.secrets.mode === "oneclaw",
       hasAmpersend: config.installAmpersendSdk,
+      enableX402: includeGraphX402,
     }));
   }
   file(pkg, "src/lib/burner-auto-connect.tsx", burnerAutoConnectSource());
