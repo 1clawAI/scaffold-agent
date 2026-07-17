@@ -1,6 +1,6 @@
 /**
  * Generated `lib/graph-client.ts` — The Graph gateway client.
- * Uses GRAPH_API_KEY (Bearer) when set; otherwise x402 via @graphprotocol/client-x402.
+ * Uses GRAPH_API_KEY (in URL path) when set; otherwise x402 via @graphprotocol/client-x402.
  * @see https://thegraph.com/docs/en/subgraphs/tooling/x402-payments/
  */
 export function graphClientSource(opts: {
@@ -170,7 +170,7 @@ async function resolveGraphApiKey(): Promise<string | null> {
 `;
 
   return `/** The Graph Network registry subgraph (Arbitrum) — used for keyword search. */
-const GRAPH_NETWORK_SUBGRAPH_ID = "4sukbPwJS2fkV4ziF9xF67i1c8x9W2w1g4H6uMqkXWx";
+const GRAPH_NETWORK_SUBGRAPH_ID = "DZz4kDTdmzWLWsV373w2bSmoar3umKKH9y82SUKr5qmp";
 ${keyResolution}
 ${graphApiKeyResolver}
 /** base (mainnet) or base-sepolia (testnet) — matches The Graph x402 docs (X402_CHAIN). */
@@ -197,12 +197,9 @@ async function queryViaApiKey(
   if (!apiKey) return null;
 
   const gateway = graphGatewayBase();
-  const res = await fetch(\`\${gateway}/api/subgraphs/id/\${subgraphId}\`, {
+  const res = await fetch(\`\${gateway}/api/\${apiKey}/subgraphs/id/\${subgraphId}\`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: \`Bearer \${apiKey}\`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   });
   const json = (await res.json()) as { data?: unknown; errors?: { message: string }[] };
@@ -221,13 +218,31 @@ async function runGraphQL(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<unknown> {
+  let apiKeyError: Error | null = null;
   try {
     const viaKey = await queryViaApiKey(subgraphId, query, variables);
     if (viaKey !== null) return viaKey;
   } catch (err) {
+    apiKeyError = err instanceof Error ? err : new Error(String(err));
     if (!(await resolveGraphApiKey())) throw err;
   }
-  return queryViaX402(subgraphId, query, variables);
+
+  try {
+    return await queryViaX402(subgraphId, query, variables);
+  } catch (x402Err) {
+    const x402Msg = x402Err instanceof Error ? x402Err.message : String(x402Err);
+    const isNoAllocations = apiKeyError?.message?.includes("no allocations");
+    const isPaymentRequired = apiKeyError?.message?.includes("402") || x402Msg.includes("402");
+    if (isNoAllocations || isPaymentRequired) {
+      throw new Error(
+        "This subgraph is x402-only (no indexer allocations for API key queries). " +
+        "Either fund the agent wallet with USDC on Base for x402 payments, or try a different " +
+        "subgraph for the same protocol — search with a broader keyword like just the protocol " +
+        'name (e.g. "uniswap" instead of "Uniswap V3") to find alternatives that work with API keys.',
+      );
+    }
+    throw x402Err;
+  }
 }
 
 /** Query a subgraph on The Graph Network (x402 or GRAPH_API_KEY). */
@@ -242,12 +257,16 @@ export async function querySubgraph(
 /** Search subgraphs by keyword via the Graph Network registry subgraph. */
 export async function searchSubgraphs(
   keyword: string,
-  first = 5,
+  first = 8,
 ): Promise<{ id: string; displayName: string; description: string }[]> {
   const escaped = keyword.replace(/"/g, '\\\\"');
+  const words = keyword.trim().split(/\\s+/);
+  const broadWord = words[0].replace(/"/g, '\\\\"');
+  const needsBroadSearch = words.length > 1;
+
   const query = \`{
     subgraphs(
-      first: \${first},
+      first: \${Math.min(first, 5)},
       where: { metadata_: { displayName_contains_nocase: "\${escaped}" } },
       orderBy: currentSignalledTokens,
       orderDirection: desc
@@ -255,6 +274,15 @@ export async function searchSubgraphs(
       id
       metadata { displayName description }
     }
+    \${needsBroadSearch ? \`broader: subgraphs(
+      first: \${first},
+      where: { metadata_: { displayName_contains_nocase: "\${broadWord}" } },
+      orderBy: currentSignalledTokens,
+      orderDirection: desc
+    ) {
+      id
+      metadata { displayName description }
+    }\` : ""}
   }\`;
 
   const json = (await runGraphQL(GRAPH_NETWORK_SUBGRAPH_ID, query)) as {
@@ -263,14 +291,26 @@ export async function searchSubgraphs(
         id: string;
         metadata?: { displayName?: string; description?: string };
       }[];
+      broader?: {
+        id: string;
+        metadata?: { displayName?: string; description?: string };
+      }[];
     };
   };
 
-  return (json.data?.subgraphs ?? []).map((s) => ({
-    id: s.id,
-    displayName: s.metadata?.displayName || s.id,
-    description: s.metadata?.description || "",
-  }));
+  const seen = new Set<string>();
+  const results: { id: string; displayName: string; description: string }[] = [];
+  for (const s of json.data?.subgraphs ?? []) {
+    if (seen.has(s.id)) continue;
+    seen.add(s.id);
+    results.push({ id: s.id, displayName: s.metadata?.displayName || s.id, description: s.metadata?.description || "" });
+  }
+  for (const s of json.data?.broader ?? []) {
+    if (seen.has(s.id)) continue;
+    seen.add(s.id);
+    results.push({ id: s.id, displayName: s.metadata?.displayName || s.id, description: s.metadata?.description || "" });
+  }
+  return results.slice(0, first);
 }
 `;
 }

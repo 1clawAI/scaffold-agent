@@ -475,7 +475,7 @@ function oneclawChainForActive(): string {
     }),
     graph_subgraph_query: tool({
       description:
-        "Query a subgraph on The Graph Network using GraphQL. Pays per-query in USDC via x402 (no API key needed). Use graph_search_subgraphs first to find the subgraph ID. Supports any deployed subgraph.",
+        "Query a subgraph on The Graph Network using GraphQL. Some subgraphs work with the project API key; newer Substreams-powered subgraphs require x402 USDC payment. If a query returns 402, try a different subgraph for the same protocol (e.g. prefer 'Uniswap-V3' over 'Substreams Uniswap v3'). Use graph_search_subgraphs first to find the subgraph ID. When presenting results to the user, format them as a clean readable table — convert timestamps to dates, round USD to 2 decimals, and show swaps as 'sold X TOKEN → bought Y TOKEN'.",
       parameters: z.object({
         subgraphId: z.string().describe("The subgraph ID from The Graph (e.g. from graph_search_subgraphs results)"),
         query: z.string().describe("GraphQL query string"),
@@ -488,7 +488,11 @@ function oneclawChainForActive(): string {
         try {
           const vars = variables ? JSON.parse(variables) : undefined;
           const result = await querySubgraph(subgraphId, query, vars);
-          return { data: result };
+          const cleaned = JSON.stringify(result)
+            .replace(/0x[a-fA-F0-9]{40,}/g, (m) => m.slice(0, 10) + "…" + m.slice(-6))
+            .replace(/"(amountUSD|amount0|amount1)":"(-?\\d+\\.\\d{2})\\d+"/g, '"$1":"$2"')
+            .replace(/"timestamp":"(\\d+)"/g, (_, ts) => \`"timestamp":"\${new Date(Number(ts) * 1000).toISOString().replace('T', ' ').slice(0, 19)} UTC"\`);
+          return { data: JSON.parse(cleaned) };
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           return { error: msg };

@@ -114,7 +114,7 @@ const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
 const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
   " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
 const CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH =
-  " You have graph_search_subgraphs and graph_subgraph_query tools for querying The Graph Network. Use graph_search_subgraphs to discover subgraphs by keyword (e.g. 'uniswap', 'aave', 'ens'), then graph_subgraph_query with the subgraph ID + GraphQL query to fetch on-chain indexed data. Queries pay per-use in USDC via x402 (no API key needed).";
+  " You have graph_search_subgraphs and graph_subgraph_query tools for querying The Graph Network. Use graph_search_subgraphs to discover subgraphs by keyword (e.g. 'uniswap', 'aave', 'ens'), then graph_subgraph_query with the subgraph ID + GraphQL query to fetch on-chain indexed data. IMPORTANT: Some subgraphs are x402-only (require USDC payment) and will fail. If a query fails with 'no allocations' or 402, retry graph_search_subgraphs with a broader keyword (e.g. just 'uniswap' instead of 'Uniswap V3') and try a different subgraph ID — non-Substreams versions usually work with API keys.";
 
 /**
  * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
@@ -2215,7 +2215,7 @@ export function LocalFaucetButton() {
 
 function chatPageContent(
   projectName: string,
-  options?: { debugLink?: boolean; linkFramework?: "next" | "react-router" },
+  options?: { debugLink?: boolean; linkFramework?: "next" | "react-router"; includeGraph?: boolean },
 ): string {
   return `"use client";
 
@@ -2338,7 +2338,7 @@ export default function Home() {
               {[
                 "What contracts are deployed?",
                 "Check my wallet balance",
-                "Resolve vitalik.eth",
+                ${options?.includeGraph ? `"Last 5 swaps on Uniswap V3 Ethereum",` : `"Resolve vitalik.eth",`}
                 "Read a contract function",
               ].map((prompt) => (
                 <button
@@ -3428,7 +3428,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   file(pkg, "public/agents.json", buildPublicAgentsJson(config));
 
-  file(pkg, "app/page.tsx", chatPageContent(config.projectName));
+  file(pkg, "app/page.tsx", chatPageContent(config.projectName, { includeGraph }));
   file(pkg, "app/debug/page.tsx", debugPageContent());
   file(
     pkg,
@@ -4162,6 +4162,7 @@ ${config.graphIntegration !== "none" ? '            <Route path="/data" element=
   const viteChatPage = chatPageContent(config.projectName, {
     debugLink: false,
     linkFramework: "react-router",
+    includeGraph: config.graphIntegration !== "none",
   }).replace('"use client";\n\n', "");
   const viteChat = viteChatPage
     .replace("export default function Home()", "export function Chat()")
