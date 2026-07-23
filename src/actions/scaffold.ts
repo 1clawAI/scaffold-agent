@@ -3052,6 +3052,13 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
   dir(pkg, "app", "ens");
   dir(pkg, "app", "balances");
   dir(pkg, "app", "swarm");
+  if (config.graphIntegration !== "none") {
+    dir(pkg, "app", "data");
+    dir(pkg, "app", "api", "graph", "search");
+    if (includeGraphX402) {
+      dir(pkg, "app", "api", "graph", "query");
+    }
+  }
   dir(pkg, "components", "ui");
   dir(pkg, "lib");
   dir(pkg, "contracts");
