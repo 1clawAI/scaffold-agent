@@ -27,7 +27,7 @@ export function dataPageSource(
   const modeHint = mcpOnly
     ? `Subgraph search runs in the browser via <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/api/graph/search</code>. For GraphQL queries at dev time, use the Subgraph MCP server in Cursor (see <code className="rounded bg-muted px-1.5 py-0.5 text-xs">.cursor/mcp.json</code>).`
     : enableQuery
-      ? `Queries pay per-use in USDC via x402 (agent wallet on Base). Optional <code className="rounded bg-muted px-1.5 py-0.5 text-xs">GRAPH_API_KEY</code> enables high-volume fallback.`
+      ? `Queries pay per-use in USDC via x402, signed by the 1claw HSM key on Base (private key never leaves hardware). Optional <code className="rounded bg-muted px-1.5 py-0.5 text-xs">GRAPH_API_KEY</code> enables high-volume fallback.`
       : "";
 
   const querySection = enableQuery
@@ -35,8 +35,7 @@ export function dataPageSource(
         <section className="${PAGE_CARD}">
           <h2 className="${PAGE_CARD_TITLE}">GraphQL query</h2>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Paste a GraphQL query for the selected subgraph. The server signs x402 payment with{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5">AGENT_PRIVATE_KEY</code> (fund with USDC on Base).
+            Paste a GraphQL query for the selected subgraph. x402 payment is signed by the 1claw HSM signing key (fund with USDC on Base).
           </p>
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="subgraph-id">

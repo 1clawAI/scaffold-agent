@@ -114,7 +114,7 @@ const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
 const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
   " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
 const CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH =
-  " You have graph_search_subgraphs and graph_subgraph_query tools for querying The Graph Network. Use graph_search_subgraphs to discover subgraphs by keyword (e.g. 'uniswap', 'aave', 'ens'), then graph_subgraph_query with the subgraph ID + GraphQL query to fetch on-chain indexed data. IMPORTANT: Some subgraphs are x402-only (require USDC payment) and will fail. If a query fails with 'no allocations' or 402, retry graph_search_subgraphs with a broader keyword (e.g. just 'uniswap' instead of 'Uniswap V3') and try a different subgraph ID — non-Substreams versions usually work with API keys.";
+  " You have graph_search_subgraphs and graph_subgraph_query tools for querying The Graph Network. Use graph_search_subgraphs to discover subgraphs by keyword (e.g. 'uniswap', 'aave', 'ens'), then graph_subgraph_query with the subgraph ID + GraphQL query to fetch on-chain indexed data. Queries are paid per-use in USDC on Base via x402, signed by the 1claw HSM signing key (private key never leaves hardware). If a query fails, try a different subgraph ID for the same protocol — search with a broader keyword. For Uniswap V3 Ethereum, the known-good subgraph ID is 5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV.";
 
 /**
  * Default Gemini model for direct Google AI Studio calls (BYOK / `useChat` Gemini-only apps).
@@ -3101,9 +3101,14 @@ function scaffoldNextJS(root: string, config: ScaffoldConfig) {
     deps["@x402/fetch"] = X402_FETCH_VERSION;
   }
   if (includeGraphX402) {
-    deps["@graphprotocol/client-x402"] = GRAPH_CLIENT_X402_VERSION;
-    if (!config.installAmpersendSdk) {
+    if (config.secrets.mode === "oneclaw" || config.llm === "oneclaw") {
       deps["@x402/fetch"] = X402_FETCH_VERSION;
+      deps["@x402/evm"] = X402_EVM_VERSION;
+    } else {
+      deps["@graphprotocol/client-x402"] = GRAPH_CLIENT_X402_VERSION;
+      if (!config.installAmpersendSdk) {
+        deps["@x402/fetch"] = X402_FETCH_VERSION;
+      }
     }
   }
 
@@ -3951,9 +3956,14 @@ function scaffoldVite(root: string, config: ScaffoldConfig) {
     deps["@x402/fetch"] = X402_FETCH_VERSION;
   }
   if (includeGraphX402) {
-    deps["@graphprotocol/client-x402"] = GRAPH_CLIENT_X402_VERSION;
-    if (!config.installAmpersendSdk) {
+    if (config.secrets.mode === "oneclaw" || config.llm === "oneclaw") {
       deps["@x402/fetch"] = X402_FETCH_VERSION;
+      deps["@x402/evm"] = X402_EVM_VERSION;
+    } else {
+      deps["@graphprotocol/client-x402"] = GRAPH_CLIENT_X402_VERSION;
+      if (!config.installAmpersendSdk) {
+        deps["@x402/fetch"] = X402_FETCH_VERSION;
+      }
     }
   }
 

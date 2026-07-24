@@ -189,6 +189,40 @@ async function provisionSigningKey(
   };
 }
 
+/**
+ * Contracts the agent must be allowed to sign EIP-712 typed data for.
+ * x402 payments use EIP-3009 TransferWithAuthorization on USDC + Permit2.
+ * Format: array of objects with `verifying_contract` (snake_case per 1claw API).
+ */
+const X402_EIP712_ALLOWLIST = [
+  { verifying_contract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }, // USDC (Base mainnet)
+  { verifying_contract: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" }, // USDC (Base Sepolia)
+  { verifying_contract: "0x000000000022D473030F116dDEE9F6B43aC78BA3" }, // Permit2 (all chains)
+];
+
+/**
+ * PATCH /v1/agents/:id — update agent configuration.
+ * Used after creation to set eip712_domain_allowlist for x402 signing.
+ */
+async function updateAgent(
+  token: string,
+  agentId: string,
+  update: Record<string, unknown>,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/v1/agents/${agentId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(update),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Failed to update agent (${res.status}): ${body || res.statusText}`);
+  }
+}
+
 export async function setupOneClaw(
   apiKey: string,
   projectName: string,
@@ -284,6 +318,12 @@ export async function setupOneClaw(
       const sk = await provisionSigningKey(token, agentInfo.id, chain);
       if (sk?.address) signingKeys.push({ chain, address: sk.address });
     }
+  }
+
+  if (agentInfo && intents) {
+    await updateAgent(token, agentInfo.id, {
+      eip712_domain_allowlist: X402_EIP712_ALLOWLIST,
+    });
   }
 
   return {
