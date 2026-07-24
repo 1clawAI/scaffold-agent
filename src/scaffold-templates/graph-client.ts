@@ -15,6 +15,13 @@ export function graphClientSource(opts: {
 import { createClient } from "@1claw/sdk";
 import type { ClientEvmSigner } from "@x402/evm";
 
+// x402 libs use BigInt internally; JSON.stringify chokes without this.
+if (!(BigInt.prototype as unknown as { toJSON?: unknown }).toJSON) {
+  (BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
+    return this.toString();
+  };
+}
+
 function getOneclawClient() {
   const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(/\\/$/, "");
   const agentId = (process.env.ONECLAW_AGENT_ID || "").trim();
