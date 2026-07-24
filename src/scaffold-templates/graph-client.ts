@@ -39,23 +39,56 @@ async function getOneclawSigner(): Promise<ClientEvmSigner> {
   }
   const { client, agentId } = oc;
 
+  let keys: { address?: string; chain?: string; status?: string }[] | undefined;
+  try {
   const keysRes = await client.signingKeys.list(agentId);
   if (keysRes.error) {
     throw new Error(\`Failed to list 1claw signing keys: \${keysRes.error.message}\`);
   }
 
-  const keys = (keysRes.data as { keys?: { address?: string; chain?: string; status?: string }[] })?.keys;
-  const baseKey = keys?.find(
-    (k) => k.chain === "ethereum" && k.status === "active" && k.address,
+  const keysData = keysRes.data as { signing_keys?: { address?: string; chain?: string; status?: string }[]; keys?: { address?: string; chain?: string; status?: string }[] };
+  keys = keysData?.signing_keys || keysData?.keys;
+  } catch (sdkErr) {
+    const msg = sdkErr instanceof Error ? sdkErr.message : String(sdkErr);
+    console.warn("[graph-client] SDK signingKeys.list failed, trying direct HTTP:", msg);
+
+    const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(/\\/$/, "");
+    const agentApiKey = (process.env.ONECLAW_AGENT_API_KEY || "").trim();
+    const tr = await fetch(baseUrl + "/v1/auth/agent-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: agentId, api_key: agentApiKey }),
+    });
+    if (!tr.ok) {
+      throw new Error(\`1claw agent auth failed (\${tr.status}). Check ONECLAW_AGENT_ID + ONECLAW_AGENT_API_KEY.\`);
+    }
+    const { access_token } = (await tr.json()) as { access_token: string };
+
+    const kr = await fetch(baseUrl + \`/v1/agents/\${agentId}/signing-keys\`, {
+      headers: { Authorization: \`Bearer \${access_token}\` },
+    });
+    if (!kr.ok) {
+      throw new Error(\`Failed to list signing keys (\${kr.status}): \${await kr.text().catch(() => "")}\`);
+    }
+    const krJson = (await kr.json()) as { signing_keys?: typeof keys; keys?: typeof keys; data?: { signing_keys?: typeof keys; keys?: typeof keys } };
+    const kData = krJson.data || krJson;
+    keys = kData?.signing_keys || kData?.keys;
+  }
+
+  const evmKey = keys?.find(
+    (k) => (k.chain === "ethereum" || k.chain === "evm") && k.status === "active" && k.address,
+  ) || keys?.find(
+    (k) => k.status === "active" && k.address && k.address.startsWith("0x"),
   );
-  if (!baseKey?.address) {
+  if (!evmKey?.address) {
     throw new Error(
-      "No active 1claw signing key found for ethereum chain. " +
-        "Provision one at 1claw.xyz and fund it with USDC on Base.",
+      "No active 1claw EVM signing key found. " +
+        "Provision one at 1claw.xyz (chain: ethereum) and fund it with USDC on Base. " +
+        "Keys returned: " + JSON.stringify(keys?.map((k) => ({ chain: k.chain, status: k.status })) || []),
     );
   }
 
-  const address = baseKey.address as \\\`0x\${string}\\\`;
+  const address = evmKey.address as \\\`0x\${string}\\\`;
 
   const signer: ClientEvmSigner = {
     address,
