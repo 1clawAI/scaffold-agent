@@ -105,10 +105,22 @@ async function getOneclawSigner(): Promise<ClientEvmSigner> {
       primaryType: string;
       message: Record<string, unknown>;
     }): Promise<\\\`0x\${string}\\\`> {
+      // 1claw HSM requires EIP712Domain in types explicitly
+      const types = { ...message.types } as Record<string, unknown>;
+      if (!types.EIP712Domain) {
+        const domainType: { name: string; type: string }[] = [];
+        if (message.domain.name !== undefined) domainType.push({ name: "name", type: "string" });
+        if (message.domain.version !== undefined) domainType.push({ name: "version", type: "string" });
+        if (message.domain.chainId !== undefined) domainType.push({ name: "chainId", type: "uint256" });
+        if (message.domain.verifyingContract !== undefined) domainType.push({ name: "verifyingContract", type: "address" });
+        if (message.domain.salt !== undefined) domainType.push({ name: "salt", type: "bytes32" });
+        types.EIP712Domain = domainType;
+      }
+
       const signRes = await client.agents.sign(agentId, {
         intent_type: "typed_data",
         chain: "base",
-        typed_data: message,
+        typed_data: { ...message, types },
       });
       if (signRes.error) {
         throw new Error(\`1claw x402 sign failed: \${signRes.error.message}\`);
