@@ -75,7 +75,7 @@ Use **`-y`** for CI/agents. **`--env-password`** (≥ 6 chars) is required when 
 
 ## Terminology
 
-- **1claw** — [1claw.xyz](https://1claw.xyz), vault + Shroud. **OpenClaw** ([openclaw.ai](https://openclaw.ai)) is a different product.
+- **1claw** — [1claw.co](https://1claw.co), vault + Shroud. **OpenClaw** ([openclaw.ai](https://openclaw.ai)) is a different product.
 
 ## More detail
 

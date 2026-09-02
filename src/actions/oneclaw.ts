@@ -1,6 +1,6 @@
 import type { OneClawResult } from "../types.js";
 
-const BASE_URL = "https://api.1claw.xyz";
+const BASE_URL = "https://api.1claw.co";
 
 /** POST /v1/vaults — body is VaultResponse or occasionally wrapped. */
 function parseVaultIdFromCreateResponse(json: unknown): string {
@@ -237,7 +237,7 @@ export async function setupOneClaw(
      * still register a 1Claw API agent so ONECLAW_AGENT_ID + key are returned.
      */
     registerShroudAgent?: boolean;
-    /** POST /v1/agents `intents_api_enabled` — https://1claw.xyz/intents */
+    /** POST /v1/agents `intents_api_enabled` — https://1claw.co/intents */
     intentsApiEnabled?: boolean;
     /** POST /v1/agents `shroud_enabled` — enable Shroud LLM proxy for this agent */
     shroudEnabled?: boolean;

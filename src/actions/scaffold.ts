@@ -110,7 +110,7 @@ const SCAFFOLD_UI_DEBUG_CONTRACTS_VERSION = "0.1.9";
 const CHAT_SYSTEM_TOOLS_SUFFIX =
   " You have server tools (list_project_addresses, get_wallet_balance, resolve_ens, lookup_erc8004_agents, list_deployed_contracts, contract_read) for wallet balances, ENS, ERC-8004 identity, deployed contracts, and RPC reads. For balance questions use list_project_addresses then get_wallet_balance (defaults to agent wallet). Prefer tools over guessing addresses or ABIs.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_ONECLAW =
-  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit / oneclaw_intent_sign_only, those call 1Claw Intents API (HSM/TEE signing across 29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron; https://1claw.xyz/intents). Signing keys never leave the HSM. Never submit high-value txs without explicit user confirmation. Use oneclaw_list_signing_keys and oneclaw_check_signing_balances for HSM key addresses and balances.";
+  " If your tool list includes oneclaw_intent_simulate / oneclaw_intent_submit / oneclaw_intent_sign_only, those call 1Claw Intents API (HSM/TEE signing across 29+ EVM chains + Bitcoin, Solana, XRP, Cardano, Tron; https://1claw.co/intents). Signing keys never leave the HSM. Never submit high-value txs without explicit user confirmation. Use oneclaw_list_signing_keys and oneclaw_check_signing_balances for HSM key addresses and balances.";
 const CHAT_SYSTEM_TOOLS_SUFFIX_X402 =
   " You have x402_paid_fetch for calling APIs behind x402 paywalls — it automatically handles 402 Payment Required responses by signing USDC payments via the Ampersend wallet. Use it when a user asks to fetch a URL that requires x402 payment (e.g. https://httpay.xyz/api/market-mood).";
 const CHAT_SYSTEM_TOOLS_SUFFIX_GRAPH =
@@ -124,7 +124,7 @@ const GEMINI_GOOGLE_AI_MODEL_DEFAULT = "gemini-2.5-flash";
 
 /**
  * Default Gemini model id sent to Shroud (`/v1/chat/completions`). Must match Shroud + Stripe AI
- * Gateway allowlists — see https://docs.1claw.xyz/docs/guides/shroud.
+ * Gateway allowlists — see https://docs.1claw.co/docs/guides/shroud.
  * `gemini-2.0-flash` was shut down Jun 1 2026; `gemini-2.5-flash` is GA until Oct 2026+.
  */
 const SHROUD_GEMINI_MODEL_DEFAULT = "gemini-2.5-flash";
@@ -517,7 +517,7 @@ ${config.installAmpersendSdk ? "\n## Ampersend (x402 payments)\n\nSee **[\\`AMPE
 
 ${
   config.secrets.mode === "oneclaw"
-    ? `This project uses [1Claw](https://1claw.xyz) for secrets management.
+    ? `This project uses [1Claw](https://1claw.co) for secrets management.
 The vault holds deployer and agent keys for app runtime. **Private keys and API keys** are stored in **\`.env.secrets.encrypted\`** (AES-256-GCM). Plain \`.env\` only has non-sensitive values (addresses, vault id, model names). **\`just deploy\`**, **\`just start\`**, etc. prompt for your password and load secrets into the process environment (nothing sensitive written to disk). CI: set **\`SCAFFOLD_ENV_PASSWORD\`**.
 
 **Programmatic IDs:** With your user **\`ONECLAW_API_KEY\`**, run **\`just list-1claw\`** (or \`node scripts/list-1claw-ids.mjs\`) to call \`GET /v1/vaults\` and \`GET /v1/agents\` — you get **vault UUIDs** and **agent UUIDs** for \`ONECLAW_VAULT_ID\` / \`ONECLAW_AGENT_ID\`. Agent **API keys** are not listable; they are only returned when you **create** an agent (\`POST /v1/agents\`, as in scaffold setup) or **rotate** (\`@1claw/sdk\` \`client.agents.rotateKey(id)\`).
@@ -538,7 +538,7 @@ ${config.llm === "oneclaw" ? `
 
 ## 1Claw Intents
 
-The **1Claw API agent** created at scaffold time has **[Intents](https://1claw.xyz/intents)** enabled: chat tools **\`oneclaw_intent_simulate\`** / **\`oneclaw_intent_submit\`** submit transaction intents (Tenderly simulation + TEE signing). Configure **allowlists**, **value caps**, and **chains** in the [1Claw dashboard](https://1claw.xyz). **\`AGENT_PRIVATE_KEY\`** in the vault is still used for local **\`just deploy\`** (Foundry/Hardhat).
+The **1Claw API agent** created at scaffold time has **[Intents](https://1claw.co/intents)** enabled: chat tools **\`oneclaw_intent_simulate\`** / **\`oneclaw_intent_submit\`** submit transaction intents (Tenderly simulation + TEE signing). Configure **allowlists**, **value caps**, and **chains** in the [1Claw dashboard](https://1claw.co). **\`AGENT_PRIVATE_KEY\`** in the vault is still used for local **\`just deploy\`** (Foundry/Hardhat).
 `
       : ""
   }
@@ -2274,7 +2274,7 @@ export default function Home() {
                   <code className="rounded bg-muted px-1">gemini-2.5-flash</code>,{" "}
                   <code className="rounded bg-muted px-1">gemini-3.5-flash</code>). See{" "}
                   <a
-                    href="https://docs.1claw.xyz/docs/guides/shroud"
+                    href="https://docs.1claw.co/docs/guides/shroud"
                     className="underline hover:text-foreground"
                     target="_blank"
                     rel="noreferrer"
@@ -2282,7 +2282,7 @@ export default function Home() {
                     Shroud docs
                   </a>
                   ) and check agent <code className="rounded bg-muted px-1">allowed_models</code> on
-                  1claw.xyz.
+                  1claw.co.
                 </p>
               ) : geminiOrQuota ? (
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -2545,9 +2545,9 @@ export default function DebugPage() {
 
 /**
  * 1Claw Shroud LLM proxy — OpenAI-compatible /v1/chat/completions.
- * @see https://docs.1claw.xyz/docs/guides/shroud
+ * @see https://docs.1claw.co/docs/guides/shroud
  *
- * SHROUD_BILLING_MODE=token_billing → no X-Shroud-Api-Key (enable billing on 1claw.xyz). Google/Gemini upstream
+ * SHROUD_BILLING_MODE=token_billing → no X-Shroud-Api-Key (enable billing on 1claw.co). Google/Gemini upstream
  *   uses Shroud when no Google key is configured; with a key, direct Generative AI is used (optional BYOK).
  * SHROUD_BILLING_MODE=provider_api_key → vault://… from api-keys/{provider} or SHROUD_PROVIDER_API_KEY; Gemini
  *   requires a Google key for the direct path (503 if missing).
@@ -2569,7 +2569,7 @@ import {
 } from "ai";
 ${chatRouteAgentToolsStreamTextFragment()}
 const shroudBaseURL =
-  process.env.SHROUD_BASE_URL || "https://shroud.1claw.xyz/v1";
+  process.env.SHROUD_BASE_URL || "https://shroud.1claw.co/v1";
 
 const shroudProvider =
   process.env.SHROUD_LLM_PROVIDER || "${upstream}";
@@ -2637,14 +2637,14 @@ function validateShroudEnv():
     return {
       ok: false,
       response: shroudConfigError(
-        "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY. Create an agent in 1claw.xyz and copy its UUID (not a wallet address) + API key into .env / .env.secrets.encrypted, then restart next dev. If you see ONECLAW_AGENT_ID=undefined in .env, remove it — that is invalid; use just list-1claw or the dashboard for the real UUID.",
+        "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY. Create an agent in 1claw.co and copy its UUID (not a wallet address) + API key into .env / .env.secrets.encrypted, then restart next dev. If you see ONECLAW_AGENT_ID=undefined in .env, remove it — that is invalid; use just list-1claw or the dashboard for the real UUID.",
       ),
     };
   }
 
   if (!ONECLAW_UUID_RE.test(agentId)) {
     const hint = looksLikeEthereumAddress(agentId)
-      ? " You pasted an Ethereum address — that belongs in AGENT_ADDRESS (on-chain wallet), not here. Use the agent UUID from 1claw.xyz (or run just list-1claw with ONECLAW_API_KEY)."
+      ? " You pasted an Ethereum address — that belongs in AGENT_ADDRESS (on-chain wallet), not here. Use the agent UUID from 1claw.co (or run just list-1claw with ONECLAW_API_KEY)."
       : agentId.includes("0x") || agentId.includes("0X")
         ? " This value looks like a hex address. Shroud needs the 1Claw agent UUID from the dashboard (just list-1claw), not an Ethereum address."
         : "";
@@ -2665,7 +2665,7 @@ function validateShroudEnv():
       return {
         ok: false,
         response: shroudConfigError(
-          "ONECLAW_VAULT_ID is empty but SHROUD_PROVIDER_VAULT_PATH is set. Copy your vault ID from 1claw.xyz into ONECLAW_VAULT_ID (needed for vault://… Shroud headers).",
+          "ONECLAW_VAULT_ID is empty but SHROUD_PROVIDER_VAULT_PATH is set. Copy your vault ID from 1claw.co into ONECLAW_VAULT_ID (needed for vault://… Shroud headers).",
         ),
       };
     }
@@ -2675,7 +2675,7 @@ function validateShroudEnv():
 }
 
 async function readVaultSecretPlaintext(vaultId, secretPath, agentId, agentApiKey) {
-  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
+  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(
     /\\/$/,
     "",
   );
@@ -2843,7 +2843,7 @@ ${llmFactoryImport(llm)}
 import { createClient } from "@1claw/sdk";
 ${chatRouteAgentToolsStreamTextFragment()}
 ${geminiModelBlock}const client = createClient({
-  baseUrl: "https://api.1claw.xyz",
+  baseUrl: "https://api.1claw.co",
   apiKey: process.env.ONECLAW_API_KEY!,
 });
 
@@ -2860,7 +2860,7 @@ async function getLlmKey(): Promise<string> {
   }
   if (!vaultId) {
     throw new Error(
-      "ONECLAW_VAULT_ID is missing. Copy your vault id from 1claw.xyz into .env.",
+      "ONECLAW_VAULT_ID is missing. Copy your vault id from 1claw.co into .env.",
     );
   }
   const res = await client.secrets.get(vaultId, "llm-api-key");
@@ -3511,7 +3511,7 @@ import { getActiveNetwork } from "../../network-definitions.js";
 import { viemChainForNetwork } from "../../viem-chain.js";
 
 const shroudBaseURL =
-  process.env.SHROUD_BASE_URL || "https://shroud.1claw.xyz/v1";
+  process.env.SHROUD_BASE_URL || "https://shroud.1claw.co/v1";
 
 const shroudProvider =
   process.env.SHROUD_LLM_PROVIDER || "${upstream}";
@@ -3565,14 +3565,14 @@ function validateShroudEnvExpress(res) {
   if (!agentId || !agentKey) {
     res.status(400).json({
       error:
-        "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY. Use the agent UUID from 1claw.xyz (not a wallet address). If .env has ONECLAW_AGENT_ID=undefined, remove it — use just list-1claw for the real UUID.",
+        "Missing ONECLAW_AGENT_ID or ONECLAW_AGENT_API_KEY. Use the agent UUID from 1claw.co (not a wallet address). If .env has ONECLAW_AGENT_ID=undefined, remove it — use just list-1claw for the real UUID.",
     });
     return null;
   }
 
   if (!ONECLAW_UUID_RE.test(agentId)) {
     const hint = looksLikeEthereumAddress(agentId)
-      ? " You pasted an Ethereum address — use AGENT_ADDRESS for that; ONECLAW_AGENT_ID is the 1claw.xyz agent UUID (just list-1claw)."
+      ? " You pasted an Ethereum address — use AGENT_ADDRESS for that; ONECLAW_AGENT_ID is the 1claw.co agent UUID (just list-1claw)."
       : agentId.includes("0x") || agentId.includes("0X")
         ? " This value looks like a hex address. Use the 1Claw agent UUID from the dashboard (just list-1claw)."
         : "";
@@ -3601,7 +3601,7 @@ function validateShroudEnvExpress(res) {
 }
 
 async function readVaultSecretPlaintext(vaultId, secretPath, agentId, agentApiKey) {
-  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
+  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(
     /\\/$/,
     "",
   );
@@ -3766,7 +3766,7 @@ import { getActiveNetwork } from "../../network-definitions.js";
 import { viemChainForNetwork } from "../../viem-chain.js";
 
 ${geminiModelBlock}const client = createClient({
-  baseUrl: "https://api.1claw.xyz",
+  baseUrl: "https://api.1claw.co",
   apiKey: process.env.ONECLAW_API_KEY,
 });
 
@@ -3783,7 +3783,7 @@ async function getLlmKey() {
   }
   if (!vaultId) {
     throw new Error(
-      "ONECLAW_VAULT_ID is missing. Copy your vault id from 1claw.xyz into .env.",
+      "ONECLAW_VAULT_ID is missing. Copy your vault id from 1claw.co into .env.",
     );
   }
   const res = await client.secrets.get(vaultId, "llm-api-key");

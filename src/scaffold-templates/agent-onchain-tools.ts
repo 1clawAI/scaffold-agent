@@ -20,7 +20,7 @@ export function agentOnchainToolsModuleSource(includeOneclawSdk: boolean, includ
   const oneclawClientFn = includeOneclawSdk
     ? `
 function getOneclawAgentClient() {
-  const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
+  const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(
     /\\/$/,
     "",
   );
@@ -245,7 +245,7 @@ function oneclawChainForActive(): string {
     ? `,
     oneclaw_intent_simulate: tool({
       description:
-        "Simulate an EVM transaction via 1Claw Intents + Tenderly (no signing). Requires ONECLAW_AGENT_ID, ONECLAW_AGENT_API_KEY, and intents enabled for the agent. See https://1claw.xyz/intents",
+        "Simulate an EVM transaction via 1Claw Intents + Tenderly (no signing). Requires ONECLAW_AGENT_ID, ONECLAW_AGENT_API_KEY, and intents enabled for the agent. See https://1claw.co/intents",
       parameters: z.object({
         chain: z
           .string()
@@ -286,7 +286,7 @@ function oneclawChainForActive(): string {
     }),
     oneclaw_intent_submit: tool({
       description:
-        "Submit a transaction intent to 1Claw — signing and optional broadcast happen in the TEE (keys never in the model). Requires ONECLAW_AGENT_ID, ONECLAW_AGENT_API_KEY, and intents_api_enabled on the agent. See https://1claw.xyz/intents",
+        "Submit a transaction intent to 1Claw — signing and optional broadcast happen in the TEE (keys never in the model). Requires ONECLAW_AGENT_ID, ONECLAW_AGENT_API_KEY, and intents_api_enabled on the agent. See https://1claw.co/intents",
       parameters: z.object({
         chain: z
           .string()
@@ -329,7 +329,7 @@ function oneclawChainForActive(): string {
     }),
     oneclaw_intent_sign_only: tool({
       description:
-        "Sign an EVM transaction via 1Claw without broadcasting (BYORPC). Returns the raw signed_tx hex and tx_hash. Use for MEV protection, custom relayers, or manual broadcast. See https://1claw.xyz/intents",
+        "Sign an EVM transaction via 1Claw without broadcasting (BYORPC). Returns the raw signed_tx hex and tx_hash. Use for MEV protection, custom relayers, or manual broadcast. See https://1claw.co/intents",
       parameters: z.object({
         chain: z
           .string()
@@ -611,7 +611,7 @@ ${oneclawClientFn}${oneclawChainMapBlock}
 /**
  * Preset tools for the chat route: read deployed ABIs and eth_call via viem.${
     includeOneclawSdk
-      ? " When ONECLAW_AGENT_ID and ONECLAW_AGENT_API_KEY are set, also exposes 1Claw Intents (simulate, submit, sign-only, list keys/txs). Supports 29+ EVM chains plus non-EVM. See https://1claw.xyz/intents"
+      ? " When ONECLAW_AGENT_ID and ONECLAW_AGENT_API_KEY are set, also exposes 1Claw Intents (simulate, submit, sign-only, list keys/txs). Supports 29+ EVM chains plus non-EVM. See https://1claw.co/intents"
       : ""
   }
  */

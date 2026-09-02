@@ -72,7 +72,7 @@ export async function promptSecrets(): Promise<SecretsConfig> {
     choices: [
       {
         value: "oneclaw" as const,
-        name: "1Claw (1claw.xyz) [Recommended]",
+        name: "1Claw (1claw.co) [Recommended]",
         description: "HSM-backed vault — keys never stored on disk",
       },
       {
@@ -119,7 +119,7 @@ export async function promptSecrets(): Promise<SecretsConfig> {
 }
 
 /**
- * Offer [1Claw Intents](https://1claw.xyz/intents) when an API agent is created during vault setup.
+ * Offer [1Claw Intents](https://1claw.co/intents) when an API agent is created during vault setup.
  */
 export async function promptOneclawIntents(): Promise<boolean> {
   return select<boolean>({
@@ -129,7 +129,7 @@ export async function promptOneclawIntents(): Promise<boolean> {
         value: true,
         name: "Yes — TEE transaction signing via Intents API",
         description:
-          "Chat can use oneclaw_intent_* tools without the agent private key in the model. Configure allowlists and caps on 1claw.xyz (Intents availability depends on your 1Claw plan).",
+          "Chat can use oneclaw_intent_* tools without the agent private key in the model. Configure allowlists and caps on 1claw.co (Intents availability depends on your 1Claw plan).",
       },
       {
         value: false,
@@ -408,7 +408,7 @@ export async function promptLlmProvider(
         name: "1Claw (Shroud) [Recommended]",
         description: useOneClaw
           ? "1Claw Shroud LLM proxy — any upstream provider; billing or vault keys"
-          : "Shroud at shroud.1claw.xyz — set agent credentials in .env",
+          : "Shroud at shroud.1claw.co — set agent credentials in .env",
       },
       {
         value: "gemini" as const,
@@ -510,7 +510,7 @@ export async function promptShroudAgentCredentialsWhenNeeded(
 }
 
 /**
- * User must know whether LLM Token Billing is enabled on 1claw.xyz for this agent.
+ * User must know whether LLM Token Billing is enabled on 1claw.co for this agent.
  * We cannot detect it via API here — this is an explicit choice.
  */
 export async function promptShroudBillingMode(): Promise<ShroudBillingMode> {
@@ -521,7 +521,7 @@ export async function promptShroudBillingMode(): Promise<ShroudBillingMode> {
         value: "token_billing" as const,
         name: "1Claw LLM Token Billing",
         description:
-          "Billing on 1claw.xyz — no provider API key in vault or .env",
+          "Billing on 1claw.co — no provider API key in vault or .env",
       },
       {
         value: "provider_api_key" as const,
@@ -573,7 +573,7 @@ export async function promptShroudProviderApiKeyForEnv(): Promise<
   });
 }
 
-/** Which upstream LLM Shroud forwards to — see https://docs.1claw.xyz/docs/guides/shroud */
+/** Which upstream LLM Shroud forwards to — see https://docs.1claw.co/docs/guides/shroud */
 export async function promptShroudUpstreamProvider(): Promise<ShroudUpstreamProvider> {
   return select<ShroudUpstreamProvider>({
     message: "Shroud upstream provider? (1Claw proxies to this LLM)",

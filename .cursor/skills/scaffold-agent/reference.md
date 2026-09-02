@@ -49,5 +49,5 @@ Versions live in **`src/actions/scaffold.ts`** (`AMPERSEND_SDK_VERSION`, `ONECLA
 
 ## Links
 
-- [1claw Shroud](https://docs.1claw.xyz/docs/guides/shroud)
+- [1claw Shroud](https://docs.1claw.co/docs/guides/shroud)
 - [README](../../../README.md) (repo root)

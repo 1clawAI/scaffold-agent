@@ -3,7 +3,7 @@ export type ChainFramework = "foundry" | "hardhat" | "none";
 export type AppFramework = "nextjs" | "vite" | "python";
 export type LlmProvider = "oneclaw" | "gemini" | "openai" | "anthropic";
 
-/** Upstream LLM Shroud proxies to — see https://docs.1claw.xyz/docs/guides/shroud */
+/** Upstream LLM Shroud proxies to — see https://docs.1claw.co/docs/guides/shroud */
 export type ShroudUpstreamProvider =
   | "openai"
   | "anthropic"
@@ -83,7 +83,7 @@ export interface ScaffoldConfig {
   oneClawVaultId?: string;
   /**
    * When true, the 1Claw API agent created during `setupOneClaw` was registered with
-   * `intents_api_enabled` (TEE signing — https://1claw.xyz/intents). Reflected in README only.
+   * `intents_api_enabled` (TEE signing — https://1claw.co/intents). Reflected in README only.
    */
   oneclawIntentsEnabled?: boolean;
   /** Opaque blob from `agent.json` `extra` (passed to templates / future use). */

@@ -115,7 +115,7 @@ Shroud (only when --llm oneclaw):
   --oneclaw-agent-id <uuid>   Required with -y when --secrets is not oneclaw and --llm oneclaw
   --oneclaw-agent-api-key     Agent ocv_ key (same conditions)
   --oneclaw-intents           With -y: register the 1Claw API agent with Intents enabled (TEE txs;
-                              https://1claw.xyz/intents). Interactive: prompted when vault creates an agent.
+                              https://1claw.co/intents). Interactive: prompted when vault creates an agent.
   --oneclaw-signing-chains    Comma-separated chains to provision HSM signing keys for (with --oneclaw-intents).
                               Values: ethereum,bitcoin,solana,xrp,cardano,tron (default: ethereum)
 
@@ -147,7 +147,7 @@ Environment:
 /** Written into generated `.env` when LLM = 1Claw (Shroud). */
 const SHROUD_AGENT_ID_ENV_COMMENT =
   "# Shroud chat:\n" +
-  "#   ONECLAW_AGENT_ID = 1Claw agent UUID from 1claw.xyz (dashes), or run: just list-1claw\n" +
+  "#   ONECLAW_AGENT_ID = 1Claw agent UUID from 1claw.co (dashes), or run: just list-1claw\n" +
   "#   Do NOT put AGENT_ADDRESS (0x… Ethereum wallet) here — Shroud rejects it (Invalid agent_id format).\n" +
   "#\n";
 
@@ -157,7 +157,7 @@ const ONECLAW_VAULT_MISSING_COMMENT =
   "#   • You enter ONECLAW_API_KEY during wizard AND \"Creating vault…\" succeeds.\n" +
   "# If blank: add ONECLAW_API_KEY to .env.secrets (password: just start / just deploy), then run:\n" +
   "#   just list-1claw\n" +
-  "# Copy a vault id from the output into ONECLAW_VAULT_ID above, or from https://1claw.xyz\n#\n";
+  "# Copy a vault id from the output into ONECLAW_VAULT_ID above, or from https://1claw.co\n#\n";
 
 function printShroudAgentIdCliReminder() {
   section("Shroud: ONECLAW_AGENT_ID vs AGENT_ADDRESS");
@@ -404,10 +404,10 @@ async function main() {
   section("LLM Provider");
   if (llm === "oneclaw") {
     section("Shroud (1Claw LLM proxy)");
-    info("Docs: https://docs.1claw.xyz/docs/guides/shroud");
+    info("Docs: https://docs.1claw.co/docs/guides/shroud");
     if (shroudBillingMode === "token_billing") {
       info(
-        "You chose Token Billing — enable it under Billing on 1claw.xyz for this agent if needed",
+        "You chose Token Billing — enable it under Billing on 1claw.co for this agent if needed",
       );
     }
     if (secrets.mode === "oneclaw" && !generateAgent && llm === "oneclaw") {
@@ -423,7 +423,7 @@ async function main() {
     info("No provider API key stored — Shroud uses 1Claw LLM Token Billing");
     if (shroudUpstream === "google" || shroudUpstream === "gemini") {
       info(
-        "Google/Gemini + token billing: chat goes through Shroud (no GOOGLE_GENERATIVE_AI_API_KEY in this repo). Enable LLM token billing for this agent on 1claw.xyz.",
+        "Google/Gemini + token billing: chat goes through Shroud (no GOOGLE_GENERATIVE_AI_API_KEY in this repo). Enable LLM token billing for this agent on 1claw.co.",
       );
       info(
         `Default Shroud model is ${chalk.cyan("gemini-2.5-flash")}. Set SHROUD_DEFAULT_MODEL to override (see Shroud docs).`,
@@ -538,12 +538,12 @@ async function main() {
       spinner.succeed("Keys stored in 1Claw vault");
       keyValue("Vault ID", vaultId);
       console.log(
-        chalk.gray(`  Dashboard: https://1claw.xyz/vaults`),
+        chalk.gray(`  Dashboard: https://1claw.co/vaults`),
       );
       if (oneClawAgentInfo) {
         keyValue("1Claw Agent ID", oneClawAgentInfo.id);
         console.log(
-          chalk.gray(`  Dashboard: https://1claw.xyz/agents/${oneClawAgentInfo.id}`),
+          chalk.gray(`  Dashboard: https://1claw.co/agents/${oneClawAgentInfo.id}`),
         );
         if (llm === "oneclaw") {
           info(
@@ -957,11 +957,11 @@ async function main() {
   console.log("");
   console.log(chalk.gray("  Useful links:"));
   if (secrets.mode === "oneclaw" || llm === "oneclaw") {
-    console.log(chalk.gray("    1Claw Dashboard   https://1claw.xyz"));
-    console.log(chalk.gray("    1Claw Docs        https://docs.1claw.xyz"));
-    console.log(chalk.gray("    Shroud Docs       https://docs.1claw.xyz/docs/guides/shroud"));
+    console.log(chalk.gray("    1Claw Dashboard   https://1claw.co"));
+    console.log(chalk.gray("    1Claw Docs        https://docs.1claw.co"));
+    console.log(chalk.gray("    Shroud Docs       https://docs.1claw.co/docs/guides/shroud"));
     if (oneclawIntentsEnabled) {
-      console.log(chalk.gray("    Intents API       https://1claw.xyz/intents"));
+      console.log(chalk.gray("    Intents API       https://1claw.co/intents"));
     }
   }
   console.log(chalk.gray("    Scaffold-ETH      https://github.com/scaffold-eth/scaffold-eth-2"));

@@ -975,7 +975,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const DOTENV = join(ROOT, ".env");
 
-const BASE = "https://api.1claw.xyz";
+const BASE = "https://api.1claw.co";
 
 /** Merge repo-root .env into process.env without overriding the shell. */
 function mergePublicDotenv() {
@@ -1126,7 +1126,7 @@ const ROOT = join(__dirname, "..");
 const DOTENV = join(ROOT, ".env");
 const ENC = join(ROOT, ".env.secrets.encrypted");
 const PKG = join(ROOT, "package.json");
-const BASE = "https://api.1claw.xyz";
+const BASE = "https://api.1claw.co";
 
 function mergePublicDotenv() {
   const pub = loadPublicEnvFile(DOTENV);
@@ -1241,12 +1241,12 @@ async function main() {
       "║  WARNING: just reset — 1Claw re-bootstrap                             ║\\n" +
       "╠══════════════════════════════════════════════════════════════════════╣\\n" +
       "║  • This creates a **new** vault and **new** Shroud/agent credentials. ║\\n" +
-      "║  • Your **old** vault and agents stay on 1claw.xyz (not deleted).    ║\\n" +
+      "║  • Your **old** vault and agents stay on 1claw.co (not deleted).    ║\\n" +
       "║  • **Back up** first: copy .env, .env.secrets.encrypted, and export   ║\\n" +
       "║    any keys you need. Old ONECLAW_AGENT_API_KEY will **not** work for   ║\\n" +
       "║    the new agent — you must save the new key printed below.           ║\\n" +
       "║  • Org **tier limits** (vaults/agents) still apply — upgrade or free  ║\\n" +
-      "║    slots on 1claw.xyz if create/register fails.                       ║\\n" +
+      "║    slots on 1claw.co if create/register fails.                       ║\\n" +
       "╚══════════════════════════════════════════════════════════════════════╝\\n",
   );
 
@@ -1349,7 +1349,7 @@ async function main() {
   }
 
   console.log(
-    "  Old resources remain on 1claw.xyz; you can delete unused vaults/agents in the dashboard.\\n",
+    "  Old resources remain on 1claw.co; you can delete unused vaults/agents in the dashboard.\\n",
   );
 }
 
@@ -2302,8 +2302,8 @@ const vaultId = envVal("ONECLAW_VAULT_ID");
 vaultId ? ok("ONECLAW_VAULT_ID = " + vaultId) : warn("ONECLAW_VAULT_ID not set — run: just sync-1claw-env");
 const agentId = envVal("ONECLAW_AGENT_ID");
 agentId ? ok("ONECLAW_AGENT_ID = " + agentId) : warn("ONECLAW_AGENT_ID not set — run: just sync-1claw-env");
-if (vaultId) console.log("    \\x1b[90mDashboard: https://1claw.xyz/vaults\\x1b[0m");
-if (agentId) console.log("    \\x1b[90mAgent:     https://1claw.xyz/agents/" + agentId + "\\x1b[0m");` : ""}
+if (vaultId) console.log("    \\x1b[90mDashboard: https://1claw.co/vaults\\x1b[0m");
+if (agentId) console.log("    \\x1b[90mAgent:     https://1claw.co/agents/" + agentId + "\\x1b[0m");` : ""}
 
 ${hasUi ? `// ─── Packages ─────────────────────────────
 console.log("\\n\\x1b[36m  Packages\\x1b[0m");

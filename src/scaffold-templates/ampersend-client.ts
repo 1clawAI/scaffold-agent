@@ -6,7 +6,7 @@ export function ampersendClientSource(includeOneclaw: boolean): string {
   const vaultResolverBlock = includeOneclaw
     ? `
 async function readVaultSecret(secretPath: string): Promise<string | null> {
-  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(
+  const base = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(
     /\\/$/,
     "",
   );

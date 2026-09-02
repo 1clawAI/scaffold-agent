@@ -23,7 +23,7 @@ if (!(BigInt.prototype as unknown as { toJSON?: unknown }).toJSON) {
 }
 
 function getOneclawClient() {
-  const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(/\\/$/, "");
+  const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(/\\/$/, "");
   const agentId = (process.env.ONECLAW_AGENT_ID || "").trim();
   const apiKey = (process.env.ONECLAW_AGENT_API_KEY || "").trim();
   if (!agentId || !apiKey) return null;
@@ -59,7 +59,7 @@ async function getOneclawSigner(): Promise<ClientEvmSigner> {
     const msg = sdkErr instanceof Error ? sdkErr.message : String(sdkErr);
     console.warn("[graph-client] SDK signingKeys.list failed, trying direct HTTP:", msg);
 
-    const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(/\\/$/, "");
+    const baseUrl = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(/\\/$/, "");
     const agentApiKey = (process.env.ONECLAW_AGENT_API_KEY || "").trim();
     const tr = await fetch(baseUrl + "/v1/auth/agent-token", {
       method: "POST",
@@ -90,7 +90,7 @@ async function getOneclawSigner(): Promise<ClientEvmSigner> {
   if (!evmKey?.address) {
     throw new Error(
       "No active 1claw EVM signing key found. " +
-        "Provision one at 1claw.xyz (chain: ethereum) and fund it with USDC on Base. " +
+        "Provision one at 1claw.co (chain: ethereum) and fund it with USDC on Base. " +
         "Keys returned: " + JSON.stringify(keys?.map((k) => ({ chain: k.chain, status: k.status })) || []),
     );
   }
@@ -145,7 +145,7 @@ function getCachedSigner(): Promise<ClientEvmSigner> {
 }
 
 async function readVaultSecret(secretPath: string): Promise<string | null> {
-  const apiBase = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.xyz").replace(/\\/$/, "");
+  const apiBase = (process.env.ONECLAW_API_BASE_URL || "https://api.1claw.co").replace(/\\/$/, "");
   const vaultId = (process.env.ONECLAW_VAULT_ID || "").trim();
   if (!vaultId) return null;
 

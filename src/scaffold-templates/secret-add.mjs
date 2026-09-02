@@ -36,7 +36,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const DOTENV = join(ROOT, ".env");
 const ENC = join(ROOT, ".env.secrets.encrypted");
-const BASE = "https://api.1claw.xyz";
+const BASE = "https://api.1claw.co";
 
 function mergePublicDotenv() {
   const pub = loadPublicEnvFile(DOTENV);

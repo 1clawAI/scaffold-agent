@@ -3,7 +3,7 @@
     "version": "0.1.46",
     "description": "Interactive CLI to scaffold monorepo projects for onchain AI agents",
     "type": "module",
-    "author": "1clawAI (https://1claw.xyz)",
+    "author": "1clawAI (https://1claw.co)",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/1clawAI/scaffold-agent.git"

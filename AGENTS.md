@@ -4,7 +4,7 @@ This repository is the **npm CLI** that **generates** onchain-agent monorepos (F
 
 ## Terminology
 
-- **1claw / 1Claw** — [1claw.xyz](https://1claw.xyz): vault, agents, **Shroud** LLM proxy ([Shroud docs](https://docs.1claw.xyz/docs/guides/shroud)), **Intents API** ([1claw.xyz/intents](https://1claw.xyz/intents)) for HSM/TEE transaction signing across 29+ EVM chains plus Bitcoin, Solana, XRP, Cardano, and Tron.
+- **1claw / 1Claw** — [1claw.co](https://1claw.co): vault, agents, **Shroud** LLM proxy ([Shroud docs](https://docs.1claw.co/docs/guides/shroud)), **Intents API** ([1claw.co/intents](https://1claw.co/intents)) for HSM/TEE transaction signing across 29+ EVM chains plus Bitcoin, Solana, XRP, Cardano, and Tron.
 - **OpenClaw** — separate product ([openclaw.ai](https://openclaw.ai)); do not confuse with 1claw.
 - **@1claw/mcp** — MCP server with 44 tools for vault secrets, Intents API, signing keys, treasury, and execution intents.
 
@@ -31,7 +31,7 @@ Use **`-y`** / **`--non-interactive`** so no stdin prompts run (CI, scripts, oth
 
 - **Required** when default **`--secrets`** is **`oneclaw`**: **`--env-password`** (≥ 6 chars), unless you set **`--secrets none`**.
 - **`--defer-oneclaw-api-key`**: omit **`ONECLAW_API_KEY`** at scaffold time (vault not created until key exists).
-- **`--oneclaw-intents`**: with **`-y`**, register the 1Claw API agent with **Intents** enabled ([1claw.xyz/intents](https://1claw.xyz/intents)); interactive runs ask when vault setup creates an agent.
+- **`--oneclaw-intents`**: with **`-y`**, register the 1Claw API agent with **Intents** enabled ([1claw.co/intents](https://1claw.co/intents)); interactive runs ask when vault setup creates an agent.
 - **`--skip-npm-install`** / **`--skip-auto-fund`**: avoid install and fund script in automation.
 
 Minimal example (creates `./my-app` in current directory):
